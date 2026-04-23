@@ -19,15 +19,17 @@ def _required(value: str, key: str) -> str:
 async def main() -> int:
     settings = get_settings()
     app_id = _required(settings.discord_application_id, "DISCORD_APPLICATION_ID")
-    bot_token = _required(settings.discord_bot_token, "DISCORD_BOT_TOKEN")
-    guild_id = _required(
-        settings.discord_guild_id,
-        "DISCORD_GUILD_ID (guild-only sync is enforced)",
-    )
+    guild_id = (settings.discord_guild_id or "").strip()
 
     payload = build_command_manifest()
-    endpoint = f"https://discord.com/api/v10/applications/{app_id}/guilds/{guild_id}/commands"
-    scope = f"guild:{guild_id}"
+    if guild_id:
+        endpoint = (
+            f"https://discord.com/api/v10/applications/{app_id}/guilds/{guild_id}/commands"
+        )
+        scope = f"guild:{guild_id}"
+    else:
+        endpoint = f"https://discord.com/api/v10/applications/{app_id}/commands"
+        scope = "global"
 
     if settings.discord_sync_dry_run:
         print(
@@ -41,6 +43,8 @@ async def main() -> int:
             )
         )
         return 0
+
+    bot_token = _required(settings.discord_bot_token, "DISCORD_BOT_TOKEN")
 
     async with httpx.AsyncClient(timeout=20) as client:
         response = await client.put(

@@ -12,6 +12,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Dry run Discord command sync
+        env:
+          DISCORD_APPLICATION_ID: "0"
+          DISCORD_SYNC_DRY_RUN: "true"
+        run: sync-discord-commands
+
       - name: Install cloudflared
         run: ./.github/scripts/install-cloudflared.sh
 
