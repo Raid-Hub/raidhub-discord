@@ -20,7 +20,11 @@ dependencies = [
 ]
 
 [project.scripts]
-sync-discord-commands = "cli_sync_commands:cli"
+sync-discord-commands = "src.cli_sync_commands:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src"]
 
 [project.optional-dependencies]
 dev = [
