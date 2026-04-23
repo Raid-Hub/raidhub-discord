@@ -1,0 +1,38 @@
+name: Manually Deploy Discord to Prod
+
+on:
+  workflow_dispatch:
+
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if user is a repo admin
+        working-directory: ./
+        run: |
+          if [[ $(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission" | jq -r '.permission') != "admin" ]]; then
+          echo "Only repo admins can run this action."
+          exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install cloudflared
+        run: ./.github/scripts/install-cloudflared.sh
+
+      - name: Load SSH Key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
+
+      - name: Deploy Discord service
+        env:
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_GHA_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_GHA_CLIENT_SECRET }}
+        run: |
+          branch_ref="${{ github.ref }}"
+          branch_name="${branch_ref#refs/heads/}"
+          ssh -o ProxyCommand="cloudflared access ssh --hostname %h" root@ssh.raidhub.io \
+          "/RaidHub/API-env/deploy.sh $branch_name discord"
