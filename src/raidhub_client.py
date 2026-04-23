@@ -1,22 +1,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from enum import StrEnum
 from typing import Any
 
 import httpx
 import jwt
 
 from .log import raidhub_api
+from .raidhub_client_envelope import normalize_envelope_response
+from .raidhub_client_types import RaidHubEnvelopeCode
 
 DISCORD_AUTH_SCHEME = "Discord"
-
-
-class RaidHubEnvelopeCode(StrEnum):
-    RAIDHUB_API_UNREACHABLE = "RaidHubApiUnreachable"
-    NON_JSON_RESPONSE = "NonJsonResponse"
-    RAIDHUB_API_SERVER_ERROR = "RaidHubApiServerError"
-    RAIDHUB_API_CLIENT_ERROR = "RaidHubApiClientError"
 
 
 def discord_invocation_context(
@@ -63,6 +57,16 @@ class RaidHubClient:
         }
         return jwt.encode(payload, self._jwt_secret, algorithm="HS256")
 
+    def _headers(self, discord_context: dict[str, Any] | None = None) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        if self._api_key:
+            headers["x-api-key"] = self._api_key
+        if discord_context:
+            headers["authorization"] = (
+                f"{DISCORD_AUTH_SCHEME} {self._sign_discord_jwt(discord_context)}"
+            )
+        return headers
+
     async def request(
         self,
         method: str,
@@ -71,13 +75,7 @@ class RaidHubClient:
         params: dict[str, Any] | None = None,
         discord_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        headers: dict[str, str] = {}
-        if self._api_key:
-            headers["x-api-key"] = self._api_key
-        if discord_context:
-            headers["authorization"] = (
-                f"{DISCORD_AUTH_SCHEME} {self._sign_discord_jwt(discord_context)}"
-            )
+        headers = self._headers(discord_context)
         async with httpx.AsyncClient(base_url=self._base_url, timeout=15) as client:
             response = await client.request(method, path, params=params, headers=headers)
             response.raise_for_status()
@@ -93,13 +91,7 @@ class RaidHubClient:
         discord_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Normalize RaidHub JSON envelopes and HTTP status without raising on transport/HTTP errors."""
-        headers: dict[str, str] = {}
-        if self._api_key:
-            headers["x-api-key"] = self._api_key
-        if discord_context:
-            headers["authorization"] = (
-                f"{DISCORD_AUTH_SCHEME} {self._sign_discord_jwt(discord_context)}"
-            )
+        headers = self._headers(discord_context)
         try:
             async with httpx.AsyncClient(base_url=self._base_url, timeout=30) as client:
                 response = await client.request(
@@ -131,74 +123,11 @@ class RaidHubClient:
         except Exception:
             data = None
 
-        status = response.status_code
-        if 200 <= status < 300:
-            if isinstance(data, dict):
-                return data
-            raidhub_api.warn(
-                "RAIDHUB_API_NON_JSON_SUCCESS",
-                None,
-                {
-                    "base_url": self._base_url,
-                    "method": method,
-                    "path": path,
-                    "http_status": status,
-                    "body_preview": response.text[:200],
-                },
-            )
-            return {
-                "success": False,
-                "code": RaidHubEnvelopeCode.NON_JSON_RESPONSE.value,
-                "error": {"message": response.text[:500], "httpStatus": status},
-            }
-
-        if status >= 500:
-            raidhub_api.warn(
-                "RAIDHUB_API_SERVER_ERROR_RESPONSE",
-                None,
-                {
-                    "base_url": self._base_url,
-                    "method": method,
-                    "path": path,
-                    "http_status": status,
-                },
-            )
-            return {
-                "success": False,
-                "code": RaidHubEnvelopeCode.RAIDHUB_API_SERVER_ERROR.value,
-                "error": {"httpStatus": status},
-            }
-
-        if isinstance(data, dict) and data.get("success") is False:
-            err = data.get("error") or {}
-            raidhub_api.warn(
-                "RAIDHUB_API_ENVELOPE_FAILED",
-                None,
-                {
-                    "base_url": self._base_url,
-                    "method": method,
-                    "path": path,
-                    "http_status": status,
-                    "code": str(data.get("code") or ""),
-                    "error_code": str(err.get("code") or ""),
-                    "error_message": str(err.get("message") or "")[:200],
-                },
-            )
-            return data
-
-        raidhub_api.warn(
-            "RAIDHUB_API_CLIENT_ERROR_RESPONSE",
-            None,
-            {
-                "base_url": self._base_url,
-                "method": method,
-                "path": path,
-                "http_status": status,
-                "body_preview": response.text[:200],
-            },
+        return normalize_envelope_response(
+            base_url=self._base_url,
+            method=method,
+            path=path,
+            status=response.status_code,
+            response_text=response.text,
+            data=data,
         )
-        return {
-            "success": False,
-            "code": RaidHubEnvelopeCode.RAIDHUB_API_CLIENT_ERROR.value,
-            "error": {"httpStatus": status},
-        }

@@ -6,7 +6,7 @@ import sys
 
 import httpx
 
-from .command_manifest import build_command_manifest
+from .manifest import build_command_manifest
 from .config import get_settings
 
 

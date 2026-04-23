@@ -9,5 +9,8 @@ _REPO_ROOT = str(Path(__file__).resolve().parent.parent)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from src.sync_commands import cli
+def cli() -> int:
+    from src.sync_commands import cli as sync_cli
+
+    return sync_cli()
 

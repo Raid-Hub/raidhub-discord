@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -79,6 +80,24 @@ def flatten_options(options: list[dict[str, Any]] | None) -> dict[str, Any]:
     return out
 
 
+def iso_to_discord_relative(iso_value: Any) -> str:
+    if iso_value is None:
+        return "—"
+    s = str(iso_value).strip()
+    if not s:
+        return "—"
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return "—"
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    ts = int(dt.timestamp())
+    return f"<t:{ts}:R>"
+
+
 def application_id(interaction: dict[str, Any], settings: Settings) -> str:
     return str(
         interaction.get("application_id") or settings.discord_application_id or ""
@@ -124,4 +143,28 @@ async def patch_discord_followup_best_effort(
         discord_application_id,
         interaction_token,
         {"content": USER_FACING_DISCORD_UPDATE_FAILED},
+    )
+
+
+async def report_deferred_exception(
+    *,
+    command: str,
+    log_key: str,
+    err: Exception,
+    discord_application_id: str,
+    interaction_token: str,
+    user_message_payload: dict[str, Any],
+) -> None:
+    handlers.error(
+        log_key,
+        err,
+        {
+            "command": command,
+            "component": "discord_deferred_handler",
+            "application_id": discord_application_id,
+            "has_interaction_token": bool(interaction_token),
+        },
+    )
+    await patch_discord_followup_best_effort(
+        discord_application_id, interaction_token, user_message_payload
     )

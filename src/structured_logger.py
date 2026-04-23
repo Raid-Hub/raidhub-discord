@@ -13,6 +13,8 @@ import sys
 from datetime import datetime, timezone
 from typing import Any, TextIO
 
+import sentry_sdk
+
 _LOG_LEVEL_PRIORITY = {"debug": 0, "info": 1, "warn": 2, "error": 3}
 
 _LEVEL_DEBUG = "DEBUG"
@@ -82,6 +84,19 @@ class Logger:
         stream.write(line)
         stream.flush()
 
+    def _capture_sentry(self, *, log_key: str, err: BaseException, fields: dict[str, Any]) -> None:
+        if sentry_sdk.Hub.current.client is None:
+            return
+        with sentry_sdk.push_scope() as scope:
+            scope.set_tag("logger", self.prefix)
+            scope.set_tag("log_key", log_key)
+            for k, v in fields.items():
+                if k.startswith("$"):
+                    scope.set_tag(k[1:], str(v))
+                else:
+                    scope.set_extra(k, v)
+            sentry_sdk.capture_exception(err)
+
     def debug(self, key: str, fields: dict[str, Any] | None = None) -> None:
         if not _should_log("debug"):
             return
@@ -100,11 +115,11 @@ class Logger:
         self._emit(_LEVEL_WARN, sys.stderr, key, merged)
 
     def error(self, key: str, err: BaseException, fields: dict[str, Any] | None = None) -> None:
-        if not _should_log("error"):
-            return
         merged = dict(fields or {})
         merged["error"] = str(err)
-        self._emit(_LEVEL_ERROR, sys.stderr, key, merged)
+        if _should_log("error"):
+            self._emit(_LEVEL_ERROR, sys.stderr, key, merged)
+        self._capture_sentry(log_key=key, err=err, fields=merged)
 
     def fatal(self, key: str, err: BaseException | None, fields: dict[str, Any] | None = None) -> None:
         merged = dict(fields or {})

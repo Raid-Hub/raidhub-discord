@@ -3,20 +3,19 @@ from __future__ import annotations
 from typing import Any
 
 from ..config import Settings
-from ..log import handlers
 from ..prom_metrics import observe_deferred_completion
 from ..raidhub_client import RaidHubClient, discord_invocation_context
+from .subscription_helpers import subscription_envelope_error_message
+from .subscription_routes import SUB_ROUTE_DELETE
 from .shared import (
     USER_FACING_GENERIC,
     application_id,
     error_embed,
     patch_discord_followup_best_effort,
+    report_deferred_exception,
     success_embed,
     warn_embed,
 )
-from .subscription import subscription_envelope_error_message
-
-_ROUTE_DELETE = "DELETE subscriptions/discord/webhooks"
 
 
 async def run_unsubscribe_deferred(
@@ -39,7 +38,7 @@ async def run_unsubscribe_deferred(
             )
             return
 
-        ctx = discord_invocation_context(interaction, route_id=_ROUTE_DELETE)
+        ctx = discord_invocation_context(interaction, route_id=SUB_ROUTE_DELETE)
         env = await raidhub.request_envelope(
             "DELETE",
             "/subscriptions/discord/webhooks",
@@ -66,11 +65,13 @@ async def run_unsubscribe_deferred(
         )
     except Exception as err:
         outcome = "error"
-        handlers.error("UNSUBSCRIBE_DEFERRED_FAILED", err, {})
-        await patch_discord_followup_best_effort(
-            app_id,
-            token,
-            error_embed("Unsubscribe Failed", USER_FACING_GENERIC),
+        await report_deferred_exception(
+            command="unsubscribe",
+            log_key="UNSUBSCRIBE_DEFERRED_FAILED",
+            err=err,
+            discord_application_id=app_id,
+            interaction_token=token,
+            user_message_payload=error_embed("Unsubscribe Failed", USER_FACING_GENERIC),
         )
     finally:
         observe_deferred_completion(command="unsubscribe", outcome=outcome)

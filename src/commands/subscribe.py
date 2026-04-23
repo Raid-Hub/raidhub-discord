@@ -4,74 +4,24 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
-from urllib.parse import urlparse
 
 from ..config import Settings
-from ..log import handlers
 from ..prom_metrics import observe_deferred_completion
 from ..raidhub_client import RaidHubClient, discord_invocation_context
+from .subscribe_resolution import parse_clan_group_id, resolve_player_membership_id
+from .subscription_helpers import subscription_envelope_error_message
+from .subscription_routes import SUB_ROUTE_PUT
 from .shared import (
     USER_FACING_GENERIC,
     application_id,
     error_embed,
     flatten_options,
     patch_discord_followup_best_effort,
+    report_deferred_exception,
     success_embed,
     warn_embed,
 )
-from .subscription import subscription_envelope_error_message
-
-_ROUTE_PUT = "PUT subscriptions/discord/webhooks"
-
-_CLAN_GROUP_ID_PATTERNS = (
-    re.compile(r"(?:https?://)?(?:www\.)?raidhub\.io/clan/(\d+)", re.I),
-    re.compile(r"(?:https?://)?(?:www\.)?bungie\.net/[^?\s]*[?&]group(?:id|Id)=(\d+)", re.I),
-    re.compile(r"/GroupV2/(\d+)", re.I),
-    re.compile(r"/clan/(\d+)", re.I),
-)
-
-
-def parse_clan_group_id(raw: str) -> str | None:
-    s = raw.strip()
-    if not s:
-        return None
-    if re.fullmatch(r"\d+", s):
-        return s
-    for pat in _CLAN_GROUP_ID_PATTERNS:
-        m = pat.search(s)
-        if m:
-            return m.group(1)
-    try:
-        path = urlparse(s).path or ""
-        for seg in reversed([p for p in path.split("/") if p]):
-            if seg.isdigit() and len(seg) >= 5:
-                return seg
-    except Exception:
-        pass
-    return None
-
-
-async def resolve_player_membership_id(raidhub: RaidHubClient, raw: str) -> str | None:
-    q = raw.strip()
-    if not q:
-        return None
-    if re.fullmatch(r"\d+", q):
-        return q
-    env = await raidhub.request_envelope(
-        "GET",
-        "/player/search",
-        params={"query": q, "count": 1, "offset": 0},
-    )
-    if not env.get("success"):
-        return None
-    inner = env.get("response") or {}
-    results = list(inner.get("results") or [])
-    if not results:
-        return None
-    mid = results[0].get("membershipId")
-    return str(mid) if mid is not None else None
 
 
 async def run_subscribe_deferred(
@@ -167,7 +117,7 @@ async def run_subscribe_deferred(
             kind_label = "clan"
             body = {"targets": {"clanGroupIds": [resolved_id]}}
 
-        ctx = discord_invocation_context(interaction, route_id=_ROUTE_PUT)
+        ctx = discord_invocation_context(interaction, route_id=SUB_ROUTE_PUT)
         env = await raidhub.request_envelope(
             "PUT",
             "/subscriptions/discord/webhooks",
@@ -205,11 +155,13 @@ async def run_subscribe_deferred(
         )
     except Exception as err:
         outcome = "error"
-        handlers.error("SUBSCRIBE_DEFERRED_FAILED", err, {})
-        await patch_discord_followup_best_effort(
-            app_id,
-            token,
-            error_embed("Subscribe Failed", USER_FACING_GENERIC),
+        await report_deferred_exception(
+            command="subscribe",
+            log_key="SUBSCRIBE_DEFERRED_FAILED",
+            err=err,
+            discord_application_id=app_id,
+            interaction_token=token,
+            user_message_payload=error_embed("Subscribe Failed", USER_FACING_GENERIC),
         )
     finally:
         observe_deferred_completion(command="subscribe", outcome=outcome)
