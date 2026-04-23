@@ -19,7 +19,7 @@ from .interaction_handlers import (
     run_player_search_deferred,
     run_subscription_deferred,
 )
-from .subscribe_handlers import run_subscribe_deferred
+from .subscribe_handlers import run_subscribe_deferred, run_unsubscribe_deferred
 from .pagination import try_handle_pager_component
 from .raidhub_client import RaidHubClient
 
@@ -161,6 +161,17 @@ async def discord_interactions(
         )
         observe_interaction(
             handler="application_command_subscription_deferred",
+            status="ok",
+            started_monotonic=t0,
+        )
+        return JSONResponse(
+            {"type": InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE}
+        )
+
+    if name == "unsubscribe":
+        background_tasks.add_task(run_unsubscribe_deferred, interaction, raidhub, settings)
+        observe_interaction(
+            handler="application_command_unsubscribe_deferred",
             status="ok",
             started_monotonic=t0,
         )

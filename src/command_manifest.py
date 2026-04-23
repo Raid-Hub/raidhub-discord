@@ -141,16 +141,16 @@ def build_command_manifest() -> list[dict[str, Any]]:
                 },
                 {
                     "type": sc,
-                    "name": "delete",
-                    "description": "Remove the RaidHub subscription webhook from this channel.",
-                    "options": [],
-                },
-                {
-                    "type": sc,
                     "name": "status",
                     "description": "Show whether this channel is registered and delivery health.",
                     "options": [],
                 },
             ],
+        },
+        {
+            "name": "unsubscribe",
+            "description": "Remove the RaidHub subscription webhook from this channel.",
+            "type": int(ApplicationCommandType.CHAT_INPUT),
+            "options": [],
         },
     ]

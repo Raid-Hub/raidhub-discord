@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from enum import StrEnum
 from typing import Any
 
 import httpx
@@ -9,6 +10,13 @@ import jwt
 from .log import raidhub_api
 
 DISCORD_AUTH_SCHEME = "Discord"
+
+
+class RaidHubEnvelopeCode(StrEnum):
+    RAIDHUB_API_UNREACHABLE = "RaidHubApiUnreachable"
+    NON_JSON_RESPONSE = "NonJsonResponse"
+    RAIDHUB_API_SERVER_ERROR = "RaidHubApiServerError"
+    RAIDHUB_API_CLIENT_ERROR = "RaidHubApiClientError"
 
 
 def discord_invocation_context(
@@ -109,7 +117,7 @@ class RaidHubClient:
             )
             return {
                 "success": False,
-                "code": "RaidHubApiUnreachable",
+                "code": RaidHubEnvelopeCode.RAIDHUB_API_UNREACHABLE.value,
                 "error": {
                     "message": str(e),
                     "base_url": self._base_url,
@@ -129,14 +137,14 @@ class RaidHubClient:
                 return data
             return {
                 "success": False,
-                "code": "NonJsonResponse",
+                "code": RaidHubEnvelopeCode.NON_JSON_RESPONSE.value,
                 "error": {"message": response.text[:500], "httpStatus": status},
             }
 
         if status >= 500:
             return {
                 "success": False,
-                "code": "RaidHubApiServerError",
+                "code": RaidHubEnvelopeCode.RAIDHUB_API_SERVER_ERROR.value,
                 "error": {"httpStatus": status},
             }
 
@@ -145,6 +153,6 @@ class RaidHubClient:
 
         return {
             "success": False,
-            "code": "RaidHubApiClientError",
+            "code": RaidHubEnvelopeCode.RAIDHUB_API_CLIENT_ERROR.value,
             "error": {"httpStatus": status},
         }

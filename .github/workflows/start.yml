@@ -35,4 +35,4 @@ jobs:
           branch_ref="${{ github.ref }}"
           branch_name="${branch_ref#refs/heads/}"
           ssh -o ProxyCommand="cloudflared access ssh --hostname %h" root@ssh.raidhub.io \
-          "/RaidHub/API-env/deploy.sh $branch_name discord"
+          "/RaidHub/deployment/deploy-discord.sh $branch_name discord-bot && /RaidHub/deployment/discord-bot/.venv/bin/sync-discord-commands"

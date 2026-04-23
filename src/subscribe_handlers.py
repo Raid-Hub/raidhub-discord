@@ -12,8 +12,11 @@ from urllib.parse import urlparse
 from .config import Settings
 from .interaction_handlers import (
     _application_id,
+    _error_embed,
     _patch_discord_followup_best_effort,
+    _success_embed,
     _subscription_envelope_error_message,
+    _warn_embed,
     USER_FACING_GENERIC,
     flatten_options,
 )
@@ -23,6 +26,7 @@ from .raidhub_client import RaidHubClient, discord_invocation_context
 
 # Match RaidHub ``RaidHubRoute.getDerivedRouteId()`` for subscription routes.
 _ROUTE_PUT = "PUT subscriptions/discord/webhooks"
+_ROUTE_DELETE = "DELETE subscriptions/discord/webhooks"
 _ROUTE_STATUS = "GET subscriptions/discord/webhooks"
 
 _CLAN_GROUP_ID_PATTERNS = (
@@ -94,14 +98,19 @@ async def run_subscribe_deferred(
             await _patch_discord_followup_best_effort(
                 app_id,
                 token,
-                {"content": "Use **`/subscribe player`** or **`/subscribe clan`** with a target."},
+                _warn_embed(
+                    "Subscribe Command",
+                    "Use `/subscribe player` or `/subscribe clan` with a target.",
+                ),
             )
             return
 
         sub = str(top_opts[0].get("name") or "").strip().lower()
         if sub not in ("player", "clan"):
             await _patch_discord_followup_best_effort(
-                app_id, token, {"content": "Unknown `/subscribe` subcommand."}
+                app_id,
+                token,
+                _warn_embed("Subscribe Command", "Unknown `/subscribe` subcommand."),
             )
             return
 
@@ -111,7 +120,10 @@ async def run_subscribe_deferred(
             await _patch_discord_followup_best_effort(
                 app_id,
                 token,
-                {"content": "Provide a **target** (membership id / player name, or clan id / URL)."},
+                _warn_embed(
+                    "Subscribe Command",
+                    "Provide a target (membership id / player name, or clan id / URL).",
+                ),
             )
             return
 
@@ -119,7 +131,10 @@ async def run_subscribe_deferred(
             await _patch_discord_followup_best_effort(
                 app_id,
                 token,
-                {"content": "Run **`/subscribe`** in a **server text channel**, not a DM."},
+                _warn_embed(
+                    "Subscribe Command",
+                    "Run `/subscribe` in a server text channel, not a DM.",
+                ),
             )
             return
 
@@ -129,12 +144,11 @@ async def run_subscribe_deferred(
                 await _patch_discord_followup_best_effort(
                     app_id,
                     token,
-                    {
-                        "content": (
-                            "Could not resolve that player. Try a **Destiny membership id** "
-                            "or a clearer **name** (first RaidHub search hit is used)."
-                        )
-                    },
+                    _error_embed(
+                        "Player Not Found",
+                        "Could not resolve that player. Try a Destiny membership id or a clearer"
+                        " name (first RaidHub search hit is used).",
+                    ),
                 )
                 return
             resolved_id = mid
@@ -146,12 +160,11 @@ async def run_subscribe_deferred(
                 await _patch_discord_followup_best_effort(
                     app_id,
                     token,
-                    {
-                        "content": (
-                            "Could not parse a **clan group id** from that. Use digits only, "
-                            "or a **raidhub.io/clan/…** / Bungie clan URL containing the group id."
-                        )
-                    },
+                    _error_embed(
+                        "Clan ID Not Recognized",
+                        "Could not parse a clan group id from that value. Use digits only, or a"
+                        " raidhub.io/clan/... / Bungie clan URL containing the group id.",
+                    ),
                 )
                 return
             resolved_id = gid
@@ -170,7 +183,10 @@ async def run_subscribe_deferred(
             await _patch_discord_followup_best_effort(
                 app_id,
                 token,
-                {"content": _subscription_envelope_error_message(env)},
+                _error_embed(
+                    "Subscribe Failed",
+                    _subscription_envelope_error_message(env),
+                ),
             )
             return
 
@@ -185,12 +201,11 @@ async def run_subscribe_deferred(
         await _patch_discord_followup_best_effort(
             app_id,
             token,
-            {
-                "content": (
-                    f"**Subscribed** ({action}) to **{kind_label}** `{resolved_id}` for this channel. "
-                    "Use `/subscription status` to inspect delivery health and rules."
-                )
-            },
+            _success_embed(
+                "Subscription Saved",
+                f"Subscribed ({action}) to {kind_label} `{resolved_id}` for this channel. "
+                "Use `/subscription status` to inspect delivery health and rules.",
+            ),
         )
     except Exception as e:
         outcome = "error"
@@ -198,7 +213,64 @@ async def run_subscribe_deferred(
         await _patch_discord_followup_best_effort(
             app_id,
             token,
-            {"content": USER_FACING_GENERIC},
+            _error_embed("Subscribe Failed", USER_FACING_GENERIC),
         )
     finally:
         observe_deferred_completion(command="subscribe", outcome=outcome)
+
+
+async def run_unsubscribe_deferred(
+    interaction: dict[str, Any],
+    raidhub: RaidHubClient,
+    settings: Settings,
+) -> None:
+    app_id = _application_id(interaction, settings)
+    token = str(interaction.get("token") or "")
+    outcome = "completed"
+    try:
+        if not interaction.get("guild_id") or not interaction.get("channel_id"):
+            await _patch_discord_followup_best_effort(
+                app_id,
+                token,
+                _warn_embed(
+                    "Unsubscribe Command",
+                    "Run `/unsubscribe` in a server text channel, not a DM.",
+                ),
+            )
+            return
+
+        ctx = discord_invocation_context(interaction, route_id=_ROUTE_DELETE)
+        env = await raidhub.request_envelope(
+            "DELETE",
+            "/subscriptions/discord/webhooks",
+            discord_context=ctx,
+        )
+        if not env.get("success"):
+            await _patch_discord_followup_best_effort(
+                app_id,
+                token,
+                _error_embed(
+                    "Unsubscribe Failed",
+                    _subscription_envelope_error_message(env),
+                ),
+            )
+            return
+
+        await _patch_discord_followup_best_effort(
+            app_id,
+            token,
+            _success_embed(
+                "Subscription Removed",
+                "RaidHub will no longer use a webhook in this channel.",
+            ),
+        )
+    except Exception as e:
+        outcome = "error"
+        handlers.error("UNSUBSCRIBE_DEFERRED_FAILED", e, {})
+        await _patch_discord_followup_best_effort(
+            app_id,
+            token,
+            _error_embed("Unsubscribe Failed", USER_FACING_GENERIC),
+        )
+    finally:
+        observe_deferred_completion(command="unsubscribe", outcome=outcome)

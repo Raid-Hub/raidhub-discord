@@ -15,7 +15,11 @@ from .pagination import (
     register_pager,
     store_paged_session,
 )
-from .raidhub_client import RaidHubClient, discord_invocation_context
+from .raidhub_client import (
+    RaidHubClient,
+    RaidHubEnvelopeCode,
+    discord_invocation_context,
+)
 
 PLAYER_SEARCH_PREFIX = "ps"
 PLAYER_SEARCH_PAGE_SIZE = 10
@@ -34,21 +38,54 @@ USER_FACING_DISCORD_UPDATE_FAILED = (
 )
 
 
+def _base_embed(
+    *,
+    title: str,
+    description: str,
+    color: int,
+    fields: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    embed: dict[str, Any] = {
+        "title": title,
+        "description": description[:4096],
+        "color": color,
+    }
+    if fields:
+        embed["fields"] = fields[:25]
+    return {"embeds": [embed], "components": []}
+
+
+def _info_embed(title: str, description: str) -> dict[str, Any]:
+    return _base_embed(title=title, description=description, color=0x5865_F2)
+
+
+def _success_embed(title: str, description: str) -> dict[str, Any]:
+    return _base_embed(title=title, description=description, color=0x57_F287)
+
+
+def _warn_embed(title: str, description: str) -> dict[str, Any]:
+    return _base_embed(title=title, description=description, color=0xFEE7_5C)
+
+
+def _error_embed(title: str, description: str) -> dict[str, Any]:
+    return _base_embed(title=title, description=description, color=0xED42_45)
+
+
 def _discord_message_for_failed_envelope(code: str, _detail: str) -> str:
-    if code == "RaidHubApiUnreachable":
+    if code == RaidHubEnvelopeCode.RAIDHUB_API_UNREACHABLE.value:
         return (
             "Could not connect to the RaidHub API. Set `RAIDHUB_API_BASE_URL` to a URL this "
             "host can reach from the network (for a cloud Discord app, `http://localhost:8000` "
             "is not reachable — use your public API base URL)."
         )
-    if code == "RaidHubApiServerError":
+    if code == RaidHubEnvelopeCode.RAIDHUB_API_SERVER_ERROR.value:
         return (
             "RaidHub returned a server error (temporary outage or gateway timeout). "
             "Try again shortly."
         )
-    if code == "RaidHubApiClientError":
+    if code == RaidHubEnvelopeCode.RAIDHUB_API_CLIENT_ERROR.value:
         return "RaidHub could not process this request."
-    if code == "NonJsonResponse":
+    if code == RaidHubEnvelopeCode.NON_JSON_RESPONSE.value:
         return "RaidHub returned an unexpected response."
     return USER_FACING_GENERIC
 
@@ -99,6 +136,7 @@ def _discord_relative_timestamp(iso_value: Any) -> str:
     s = str(iso_value).strip()
     if not s:
         return "—"
+
     if s.endswith("Z"):
         s = s[:-1] + "+00:00"
     dt = datetime.fromisoformat(s)
@@ -326,28 +364,38 @@ def _subscription_rules_suffix(rules: dict[str, Any]) -> str:
     return ""
 
 
-def _format_subscription_status_message(data: dict[str, Any]) -> str:
+def _format_subscription_status_embed(data: dict[str, Any]) -> dict[str, Any]:
     if not data.get("registered"):
-        return "No RaidHub subscription webhook is registered for **this channel**."
+        return _info_embed(
+            "Subscription Status",
+            "No RaidHub subscription webhook is registered for this channel.",
+        )
     active = "**yes**" if data.get("destinationActive") else "**no**"
     fails = int(data.get("consecutiveDeliveryFailures") or 0)
-    lines = [
-        "**Subscription status**",
-        f"Destination active: {active}",
-        f"Webhook ID: `{data.get('webhookId', '—')}`",
-        f"Delivery failures (streak): **{fails}**",
+    fields: list[dict[str, Any]] = [
+        {"name": "Destination Active", "value": active, "inline": True},
+        {"name": "Webhook ID", "value": f"`{data.get('webhookId', '—')}`", "inline": True},
+        {"name": "Delivery Failures", "value": f"**{fails}**", "inline": True},
     ]
     ls = data.get("lastDeliverySuccessAt")
     lf = data.get("lastDeliveryFailureAt")
-    lines.append(
-        f"Last delivery success: {_discord_relative_timestamp(ls) if ls else '—'}"
+    fields.append(
+        {
+            "name": "Last Delivery Success",
+            "value": _discord_relative_timestamp(ls) if ls else "—",
+            "inline": True,
+        }
     )
-    lines.append(
-        f"Last delivery failure: {_discord_relative_timestamp(lf) if lf else '—'}"
+    fields.append(
+        {
+            "name": "Last Delivery Failure",
+            "value": _discord_relative_timestamp(lf) if lf else "—",
+            "inline": True,
+        }
     )
     err = data.get("lastDeliveryError")
     if err:
-        lines.append(f"Last error: {str(err)[:280]}")
+        fields.append({"name": "Last Error", "value": str(err)[:280], "inline": False})
 
     pl_raw = list(data.get("players") or [])
     cl_raw = list(data.get("clans") or [])
@@ -372,9 +420,14 @@ def _format_subscription_status_message(data: dict[str, Any]) -> str:
     c_list = ", ".join(c_show) if c_show else "—"
     if cc > len(c_show):
         c_list = f"{c_list} (+{cc - len(c_show)} more)"
-    lines.append(f"Player rules: **{pc}** ({p_list})")
-    lines.append(f"Clan rules: **{cc}** ({c_list})")
-    return "\n".join(lines)
+    fields.append({"name": f"Player Rules ({pc})", "value": p_list[:1024], "inline": False})
+    fields.append({"name": f"Clan Rules ({cc})", "value": c_list[:1024], "inline": False})
+    return _base_embed(
+        title="Subscription Status",
+        description="Current webhook destination and delivery health.",
+        color=0x5865_F2,
+        fields=fields,
+    )
 
 
 def _subscription_envelope_error_message(env: dict[str, Any]) -> str:
@@ -407,18 +460,19 @@ async def run_subscription_deferred(
             await _patch_discord_followup_best_effort(
                 app_id,
                 token,
-                {
-                    "content": (
-                        "Pick **register**, **update**, **delete**, or **status** under `/subscription`."
-                    )
-                },
+                _warn_embed(
+                    "Subscription Command",
+                    "Pick `register`, `update`, `delete`, or `status` under `/subscription`.",
+                ),
             )
             return
 
         sub = str(top_opts[0].get("name") or "").strip().lower()
         if sub not in ("register", "update", "delete", "status"):
             await _patch_discord_followup_best_effort(
-                app_id, token, {"content": "Unknown subscription subcommand."}
+                app_id,
+                token,
+                _warn_embed("Subscription Command", "Unknown `/subscription` subcommand."),
             )
             return
 
@@ -426,7 +480,10 @@ async def run_subscription_deferred(
             await _patch_discord_followup_best_effort(
                 app_id,
                 token,
-                {"content": "Run this command in a **server channel**, not a DM."},
+                _warn_embed(
+                    "Subscription Command",
+                    "Run this command in a server channel, not a DM.",
+                ),
             )
             return
 
@@ -464,18 +521,24 @@ async def run_subscription_deferred(
             await _patch_discord_followup_best_effort(
                 app_id,
                 token,
-                {"content": _subscription_envelope_error_message(env)},
+                _error_embed(
+                    "Subscription Request Failed",
+                    _subscription_envelope_error_message(env),
+                ),
             )
             return
 
         inner = env.get("response") or {}
         if sub == "status":
-            msg = _format_subscription_status_message(inner)
+            msg = _format_subscription_status_embed(inner)
         elif sub == "delete":
-            msg = "**Unregistered.** RaidHub will no longer use a webhook in this channel."
+            msg = _success_embed(
+                "Subscription Removed",
+                "RaidHub will no longer use a webhook in this channel.",
+            )
         elif sub == "register":
             parts = [
-                "**Registered.** RaidHub subscription events will post to this channel.",
+                "RaidHub subscription events will post to this channel.",
             ]
             if inner.get("created"):
                 parts.append("A new subscription destination was created.")
@@ -485,23 +548,23 @@ async def run_subscription_deferred(
             rs = _subscription_rules_suffix(rules)
             if rs:
                 parts.append(rs)
-            msg = " ".join(parts)
+            msg = _success_embed("Subscription Registered", " ".join(parts))
         else:
-            parts = ["**Updated.** Subscription rules for this channel were saved."]
+            parts = ["Subscription rules for this channel were saved."]
             if inner.get("activated"):
                 parts.append("The destination was re-activated.")
             rules = inner.get("rules") or {}
             rs = _subscription_rules_suffix(rules)
             if rs:
                 parts.append(rs)
-            msg = " ".join(parts)
+            msg = _success_embed("Subscription Updated", " ".join(parts))
 
-        await _patch_discord_followup_best_effort(app_id, token, {"content": msg})
+        await _patch_discord_followup_best_effort(app_id, token, msg)
     except Exception as e:
         outcome = "error"
         handlers.error("SUBSCRIPTION_DEFERRED_FAILED", e, {})
         await _patch_discord_followup_best_effort(
-            app_id, token, {"content": USER_FACING_GENERIC}
+            app_id, token, _error_embed("Subscription Failed", USER_FACING_GENERIC)
         )
     finally:
         observe_deferred_completion(command="subscription", outcome=outcome)

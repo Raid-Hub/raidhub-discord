@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
-sync-discord-commands = "src.sync_commands:cli"
+sync-discord-commands = "cli_sync_commands:cli"
 
 [project.optional-dependencies]
 dev = [
