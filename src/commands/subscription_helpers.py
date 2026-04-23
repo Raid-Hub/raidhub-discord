@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .subscription_routes import SUB_ROUTE_DELETE, SUB_ROUTE_PUT, SUB_ROUTE_STATUS
 from .shared import (
     base_embed,
     discord_message_for_failed_envelope,
