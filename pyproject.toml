@@ -1,0 +1,31 @@
+[project]
+name = "raidhub-discord"
+version = "0.1.0"
+description = "RaidHub Discord ingress and command service"
+requires-python = ">=3.14"
+dependencies = [
+  "discord-interactions",
+  "fastapi",
+  "uvicorn",
+  "pynacl",
+  "httpx",
+  "python-dotenv",
+  "PyJWT",
+  "prometheus-client",
+]
+
+[project.scripts]
+sync-discord-commands = "src.sync_commands:cli"
+
+[project.optional-dependencies]
+dev = [
+  "ruff",
+  "mypy"
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+python_version = "3.14"
+strict = false
