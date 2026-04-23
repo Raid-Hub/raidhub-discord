@@ -20,14 +20,14 @@ async def main() -> int:
     settings = get_settings()
     app_id = _required(settings.discord_application_id, "DISCORD_APPLICATION_ID")
     bot_token = _required(settings.discord_bot_token, "DISCORD_BOT_TOKEN")
+    guild_id = _required(
+        settings.discord_guild_id,
+        "DISCORD_GUILD_ID (guild-only sync is enforced)",
+    )
 
     payload = build_command_manifest()
-    endpoint = (
-        f"https://discord.com/api/v10/applications/{app_id}/guilds/{settings.discord_guild_id}/commands"
-        if settings.discord_guild_id
-        else f"https://discord.com/api/v10/applications/{app_id}/commands"
-    )
-    scope = f"guild:{settings.discord_guild_id}" if settings.discord_guild_id else "global"
+    endpoint = f"https://discord.com/api/v10/applications/{app_id}/guilds/{guild_id}/commands"
+    scope = f"guild:{guild_id}"
 
     if settings.discord_sync_dry_run:
         print(

@@ -10,16 +10,17 @@ from fastapi.responses import JSONResponse
 from starlette.responses import Response
 
 from .config import get_settings
-from .discord_auth import verify_discord_signature
+from .discord_auth import verify_discord_signature_with_reason
 from .log import ingress
 from .prom_metrics import metrics_response, observe_interaction
-from .interaction_handlers import (
+from .commands import (
     register_player_search_pager,
     run_instance_deferred,
     run_player_search_deferred,
+    run_subscribe_deferred,
     run_subscription_deferred,
+    run_unsubscribe_deferred,
 )
-from .subscribe_handlers import run_subscribe_deferred, run_unsubscribe_deferred
 from .pagination import try_handle_pager_component
 from .raidhub_client import RaidHubClient
 
@@ -54,7 +55,7 @@ async def discord_interactions(
     signature = request.headers.get("X-Signature-Ed25519", "")
     timestamp = request.headers.get("X-Signature-Timestamp", "")
     raw_body = await request.body()
-    signature_ok = verify_discord_signature(
+    signature_ok, signature_reason = verify_discord_signature_with_reason(
         settings.discord_public_key, timestamp, raw_body, signature
     )
 
@@ -67,11 +68,24 @@ async def discord_interactions(
             "has_timestamp": bool(timestamp),
             "has_public_key": bool(settings.discord_public_key),
             "signature_valid": signature_ok,
+            "signature_reason": signature_reason,
+            "signature_len": len(signature.strip()),
+            "timestamp_len": len(timestamp.strip()),
+            "body_len": len(raw_body),
         },
     )
 
     if not signature_ok:
-        ingress.warn("DISCORD_SIGNATURE_INVALID", None, {})
+        ingress.warn(
+            "DISCORD_SIGNATURE_INVALID",
+            None,
+            {
+                "reason": signature_reason,
+                "signature_len": len(signature.strip()),
+                "timestamp_len": len(timestamp.strip()),
+                "body_len": len(raw_body),
+            },
+        )
         observe_interaction(handler="signature_invalid", status="rejected", started_monotonic=t0)
         raise HTTPException(status_code=401, detail="Invalid Discord signature")
 

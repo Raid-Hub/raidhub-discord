@@ -135,6 +135,17 @@ class RaidHubClient:
         if 200 <= status < 300:
             if isinstance(data, dict):
                 return data
+            raidhub_api.warn(
+                "RAIDHUB_API_NON_JSON_SUCCESS",
+                None,
+                {
+                    "base_url": self._base_url,
+                    "method": method,
+                    "path": path,
+                    "http_status": status,
+                    "body_preview": response.text[:200],
+                },
+            )
             return {
                 "success": False,
                 "code": RaidHubEnvelopeCode.NON_JSON_RESPONSE.value,
@@ -142,6 +153,16 @@ class RaidHubClient:
             }
 
         if status >= 500:
+            raidhub_api.warn(
+                "RAIDHUB_API_SERVER_ERROR_RESPONSE",
+                None,
+                {
+                    "base_url": self._base_url,
+                    "method": method,
+                    "path": path,
+                    "http_status": status,
+                },
+            )
             return {
                 "success": False,
                 "code": RaidHubEnvelopeCode.RAIDHUB_API_SERVER_ERROR.value,
@@ -149,8 +170,33 @@ class RaidHubClient:
             }
 
         if isinstance(data, dict) and data.get("success") is False:
+            err = data.get("error") or {}
+            raidhub_api.warn(
+                "RAIDHUB_API_ENVELOPE_FAILED",
+                None,
+                {
+                    "base_url": self._base_url,
+                    "method": method,
+                    "path": path,
+                    "http_status": status,
+                    "code": str(data.get("code") or ""),
+                    "error_code": str(err.get("code") or ""),
+                    "error_message": str(err.get("message") or "")[:200],
+                },
+            )
             return data
 
+        raidhub_api.warn(
+            "RAIDHUB_API_CLIENT_ERROR_RESPONSE",
+            None,
+            {
+                "base_url": self._base_url,
+                "method": method,
+                "path": path,
+                "http_status": status,
+                "body_preview": response.text[:200],
+            },
+        )
         return {
             "success": False,
             "code": RaidHubEnvelopeCode.RAIDHUB_API_CLIENT_ERROR.value,

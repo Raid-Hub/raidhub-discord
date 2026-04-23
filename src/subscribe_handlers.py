@@ -115,7 +115,12 @@ async def run_subscribe_deferred(
             return
 
         leaf = flatten_options(top_opts[0].get("options"))
-        target_raw = str(leaf.get("target") or "").strip()
+        target_raw = str(
+            leaf.get("player_id_or_search_text")
+            or leaf.get("clan_group_id_or_url")
+            or leaf.get("target")
+            or ""
+        ).strip()
         if not target_raw:
             await _patch_discord_followup_best_effort(
                 app_id,
@@ -180,6 +185,19 @@ async def run_subscribe_deferred(
         )
 
         if not env.get("success"):
+            err = env.get("error") or {}
+            handlers.warn(
+                "SUBSCRIBE_ENVELOPE_FAILED",
+                None,
+                {
+                    "subcommand": sub,
+                    "route_id": _ROUTE_PUT,
+                    "code": str(env.get("code") or ""),
+                    "error_code": str(err.get("code") or ""),
+                    "http_status": int(err.get("httpStatus") or 0),
+                    "error_message": str(err.get("message") or "")[:200],
+                },
+            )
             await _patch_discord_followup_best_effort(
                 app_id,
                 token,
@@ -246,6 +264,18 @@ async def run_unsubscribe_deferred(
             discord_context=ctx,
         )
         if not env.get("success"):
+            err = env.get("error") or {}
+            handlers.warn(
+                "UNSUBSCRIBE_ENVELOPE_FAILED",
+                None,
+                {
+                    "route_id": _ROUTE_DELETE,
+                    "code": str(env.get("code") or ""),
+                    "error_code": str(err.get("code") or ""),
+                    "http_status": int(err.get("httpStatus") or 0),
+                    "error_message": str(err.get("message") or "")[:200],
+                },
+            )
             await _patch_discord_followup_best_effort(
                 app_id,
                 token,

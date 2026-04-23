@@ -332,7 +332,11 @@ def _comma_separated_digit_ids(raw: str) -> list[str]:
 
 def _subscription_json_body(leaf_opts: dict[str, Any]) -> dict[str, Any]:
     body: dict[str, Any] = {}
-    wn = str(leaf_opts.get("webhook_name") or "").strip()
+    wn = str(
+        leaf_opts.get("discord_webhook_name")
+        or leaf_opts.get("webhook_name")
+        or ""
+    ).strip()
     if wn:
         body["name"] = wn[:80]
     filters: dict[str, Any] = {}
@@ -445,6 +449,21 @@ def _subscription_envelope_error_message(env: dict[str, Any]) -> str:
     return _discord_message_for_failed_envelope(code, "")
 
 
+def _log_envelope_failure(log_key: str, env: dict[str, Any], extra: dict[str, Any]) -> None:
+    err = env.get("error") or {}
+    handlers.warn(
+        log_key,
+        None,
+        {
+            **extra,
+            "code": str(env.get("code") or ""),
+            "error_code": str(err.get("code") or ""),
+            "http_status": int(err.get("httpStatus") or 0),
+            "error_message": str(err.get("message") or "")[:200],
+        },
+    )
+
+
 async def run_subscription_deferred(
     interaction: dict[str, Any],
     raidhub: RaidHubClient,
@@ -518,6 +537,11 @@ async def run_subscription_deferred(
             )
 
         if not env.get("success"):
+            _log_envelope_failure(
+                "SUBSCRIPTION_ENVELOPE_FAILED",
+                env,
+                {"subcommand": sub, "route_id": route_id},
+            )
             await _patch_discord_followup_best_effort(
                 app_id,
                 token,
@@ -580,17 +604,21 @@ async def run_player_search_deferred(
     outcome = "completed"
     try:
         opts = flatten_options(interaction.get("data", {}).get("options"))
-        query = str(opts.get("query") or "").strip()
+        query = str(opts.get("search_query") or opts.get("query") or "").strip()
         if not query:
             await _patch_discord_followup_best_effort(
-                app_id, token, {"content": "Provide a **query** option to search."}
+                app_id, token, {"content": "Provide a **search_query** option to search."}
             )
             return
 
         query_params: dict[str, Any] = {"query": query}
-        if "membership_type" in opts:
+        if "destiny_membership_type" in opts:
+            query_params["membershipType"] = opts["destiny_membership_type"]
+        elif "membership_type" in opts:
             query_params["membershipType"] = opts["membership_type"]
-        if "global" in opts:
+        if "use_global_name_search" in opts:
+            query_params["global"] = opts["use_global_name_search"]
+        elif "global" in opts:
             query_params["global"] = opts["global"]
 
         page_size = PLAYER_SEARCH_PAGE_SIZE
@@ -625,10 +653,10 @@ async def run_instance_deferred(
     outcome = "completed"
     try:
         opts = flatten_options(interaction.get("data", {}).get("options"))
-        raw_id = opts.get("instance_id")
+        raw_id = opts.get("raid_instance_id") or opts.get("instance_id")
         if raw_id is None or str(raw_id).strip() == "":
             await _patch_discord_followup_best_effort(
-                app_id, token, {"content": "Provide an **instance_id** to look up."}
+                app_id, token, {"content": "Provide a **raid_instance_id** to look up."}
             )
             return
         instance_id = str(raw_id).strip()
