@@ -6,17 +6,14 @@ from ..config import Settings
 from ..prom_metrics import observe_deferred_completion
 from ..raidhub_client import RaidHubClient, discord_invocation_context
 from .subscription_helpers import (
-    build_subscription_json_body,
     format_subscription_status_embed,
     subscription_envelope_error_message,
-    subscription_rules_suffix,
 )
-from .subscription_routes import SUB_ROUTE_DELETE, SUB_ROUTE_PUT, SUB_ROUTE_STATUS
+from .subscription_routes import SUB_ROUTE_DELETE, SUB_ROUTE_STATUS
 from .shared import (
     USER_FACING_GENERIC,
     application_id,
     error_embed,
-    flatten_options,
     patch_discord_followup_best_effort,
     report_deferred_exception,
     success_embed,
@@ -41,13 +38,13 @@ async def run_subscription_deferred(
                 token,
                 warn_embed(
                     "Subscription Command",
-                    "Pick `register`, `update`, `delete`, or `status` under `/subscription`.",
+                    "Pick `status` or `delete` under `/subscription`.",
                 ),
             )
             return
 
         sub = str(top_opts[0].get("name") or "").strip().lower()
-        if sub not in ("register", "update", "delete", "status"):
+        if sub not in ("delete", "status"):
             await patch_discord_followup_best_effort(
                 app_id,
                 token,
@@ -66,13 +63,7 @@ async def run_subscription_deferred(
             )
             return
 
-        leaf_opts = flatten_options(top_opts[0].get("options"))
-        route_id = {
-            "register": SUB_ROUTE_PUT,
-            "update": SUB_ROUTE_PUT,
-            "delete": SUB_ROUTE_DELETE,
-            "status": SUB_ROUTE_STATUS,
-        }[sub]
+        route_id = {"delete": SUB_ROUTE_DELETE, "status": SUB_ROUTE_STATUS}[sub]
         ctx = discord_invocation_context(interaction, route_id=route_id)
 
         if sub == "status":
@@ -81,18 +72,10 @@ async def run_subscription_deferred(
                 "/subscriptions/discord/webhooks",
                 discord_context=ctx,
             )
-        elif sub == "delete":
+        else:
             env = await raidhub.request_envelope(
                 "DELETE",
                 "/subscriptions/discord/webhooks",
-                discord_context=ctx,
-            )
-        else:
-            payload = build_subscription_json_body(leaf_opts)
-            env = await raidhub.request_envelope(
-                "PUT",
-                "/subscriptions/discord/webhooks",
-                json=payload if payload else {},
                 discord_context=ctx,
             )
 
@@ -109,34 +92,12 @@ async def run_subscription_deferred(
 
         inner = env.get("response") or {}
         if sub == "status":
-            msg = format_subscription_status_embed(inner)
-        elif sub == "delete":
+            msg = await format_subscription_status_embed(raidhub, inner)
+        else:
             msg = success_embed(
                 "Subscription Removed",
                 "RaidHub will no longer use a webhook in this channel.",
             )
-        elif sub == "register":
-            parts = [
-                "RaidHub subscription events will post to this channel.",
-            ]
-            if inner.get("created"):
-                parts.append("A new subscription destination was created.")
-            if inner.get("activated"):
-                parts.append("The destination was re-activated.")
-            rules = inner.get("rules") or {}
-            rs = subscription_rules_suffix(rules)
-            if rs:
-                parts.append(rs)
-            msg = success_embed("Subscription Registered", " ".join(parts))
-        else:
-            parts = ["Subscription rules for this channel were saved."]
-            if inner.get("activated"):
-                parts.append("The destination was re-activated.")
-            rules = inner.get("rules") or {}
-            rs = subscription_rules_suffix(rules)
-            if rs:
-                parts.append(rs)
-            msg = success_embed("Subscription Updated", " ".join(parts))
 
         await patch_discord_followup_best_effort(app_id, token, msg)
     except Exception as err:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import unittest
 
 from src.commands.subscription_helpers import (
@@ -65,19 +66,22 @@ class SubscriptionEnvelopeErrorMessageTests(unittest.TestCase):
 
 class FormatSubscriptionStatusEmbedTests(unittest.TestCase):
     def test_unregistered_channel(self) -> None:
-        out = format_subscription_status_embed({"registered": False})
+        out = asyncio.run(format_subscription_status_embed(None, {"registered": False}))
         self.assertIn("embeds", out)
         self.assertEqual(out["embeds"][0]["title"], "Subscription Status")
         self.assertIn("No RaidHub subscription webhook", out["embeds"][0]["description"])
 
     def test_registered_minimal(self) -> None:
-        out = format_subscription_status_embed(
-            {
-                "registered": True,
-                "destinationActive": True,
-                "webhookId": "123",
-                "consecutiveDeliveryFailures": 0,
-            }
+        out = asyncio.run(
+            format_subscription_status_embed(
+                None,
+                {
+                    "registered": True,
+                    "destinationActive": True,
+                    "webhookId": "123",
+                    "consecutiveDeliveryFailures": 0,
+                },
+            )
         )
         fields = {f["name"]: f["value"] for f in out["embeds"][0]["fields"]}
         self.assertIn("Destination Active", fields)

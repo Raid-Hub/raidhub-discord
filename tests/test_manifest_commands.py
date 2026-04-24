@@ -16,6 +16,8 @@ class ManifestCommandsTests(unittest.TestCase):
                 "subscribe",
                 "subscription",
                 "unsubscribe",
+                "unsubscribe-clan",
+                "unsubscribe-player",
             },
         )
 

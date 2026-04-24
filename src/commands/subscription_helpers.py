@@ -1,14 +1,60 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any
 
+from ..raidhub_client import RaidHubClient, discord_invocation_context
+from .subscribe_resolution import format_player_display_name
+from .subscription_routes import SUB_ROUTE_STATUS
 from .shared import (
     base_embed,
     discord_message_for_failed_envelope,
     info_embed,
     iso_to_discord_relative,
 )
+
+
+def subscription_active_player_ids(inner: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    for item in inner.get("players") or []:
+        if isinstance(item, dict):
+            raw = item.get("membershipId")
+        else:
+            raw = item
+        if raw is None:
+            continue
+        s = str(raw).strip()
+        if s.isdigit():
+            out.append(str(int(s)))
+    return sorted(set(out))
+
+
+def subscription_active_clan_ids(inner: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    for item in inner.get("clans") or []:
+        if isinstance(item, dict):
+            raw = item.get("groupId")
+        else:
+            raw = item
+        if raw is None:
+            continue
+        s = str(raw).strip()
+        if s.isdigit():
+            out.append(str(int(s)))
+    return sorted(set(out))
+
+
+async def fetch_subscription_status_envelope(
+    raidhub: RaidHubClient,
+    interaction: dict[str, Any],
+) -> dict[str, Any]:
+    ctx = discord_invocation_context(interaction, route_id=SUB_ROUTE_STATUS)
+    return await raidhub.request_envelope(
+        "GET",
+        "/subscriptions/discord/webhooks",
+        discord_context=ctx,
+    )
 
 
 def build_subscription_json_body(leaf_opts: dict[str, Any]) -> dict[str, Any]:
@@ -49,7 +95,97 @@ def subscription_rules_suffix(rules: dict[str, Any]) -> str:
     return ""
 
 
-def format_subscription_status_embed(data: dict[str, Any]) -> dict[str, Any]:
+def _embed_safe_label(label: str) -> str:
+    return label.replace("]", "")
+
+
+def _raidhub_player_url(membership_id: str) -> str:
+    return f"https://raidhub.io/profile/{membership_id}"
+
+
+def _raidhub_clan_url(group_id: str) -> str:
+    return f"https://raidhub.io/clan/{group_id}"
+
+
+def format_clan_display_name(row: dict[str, Any]) -> str:
+    name = str(row.get("name") or "").strip()
+    tag = str(row.get("callSign") or "").strip()
+    if name and tag:
+        return f"{name} [{tag}]"
+    return name or tag or "Unknown clan"
+
+
+def _ordered_membership_ids(pl_raw: list[Any]) -> list[str]:
+    out: list[str] = []
+    for item in pl_raw:
+        raw = item.get("membershipId") if isinstance(item, dict) else item
+        if raw is None:
+            continue
+        s = str(raw).strip()
+        if s.isdigit():
+            norm = str(int(s))
+            if norm not in out:
+                out.append(norm)
+    return out
+
+
+def _ordered_group_ids(cl_raw: list[Any]) -> list[str]:
+    out: list[str] = []
+    for item in cl_raw:
+        raw = item.get("groupId") if isinstance(item, dict) else item
+        if raw is None:
+            continue
+        s = str(raw).strip()
+        if s.isdigit():
+            norm = str(int(s))
+            if norm not in out:
+                out.append(norm)
+    return out
+
+
+async def _fetch_player_basic_card(raidhub: RaidHubClient, membership_id: str) -> dict[str, Any]:
+    env = await raidhub.request_envelope("GET", f"/player/{membership_id}/basic")
+    inner = env.get("response")
+    return inner if env.get("success") and isinstance(inner, dict) else {}
+
+
+async def _fetch_clan_basic_card(raidhub: RaidHubClient, group_id: str) -> dict[str, Any]:
+    env = await raidhub.request_envelope("GET", f"/clan/{group_id}/basic")
+    inner = env.get("response")
+    return inner if env.get("success") and isinstance(inner, dict) else {}
+
+
+def _player_rule_line(membership_id: str, card: dict[str, Any]) -> str:
+    if card:
+        label = _embed_safe_label(format_player_display_name(card))
+        url = _raidhub_player_url(membership_id)
+        return f"• [{label}]({url}) · `{membership_id}`"
+    return f"• `{membership_id}`"
+
+
+def _clan_rule_line(group_id: str, card: dict[str, Any]) -> str:
+    if card:
+        label = _embed_safe_label(format_clan_display_name(card))
+        url = _raidhub_clan_url(group_id)
+        return f"• [{label}]({url}) · `{group_id}`"
+    return f"• `{group_id}`"
+
+
+def _id_only_rule_lines(ids: list[str]) -> str:
+    max_show = 25
+    shown = ids[:max_show]
+    lines = [f"• `{i}`" for i in shown]
+    body = "\n".join(lines) if lines else "—"
+    extra = len(ids) - len(shown)
+    if extra > 0:
+        body = f"{body}\n… and **{extra}** more (showing names requires API access)."
+    return body[:1024]
+
+
+async def format_subscription_status_embed(
+    raidhub: RaidHubClient | None,
+    data: dict[str, Any],
+) -> dict[str, Any]:
     if not data.get("registered"):
         return info_embed(
             "Subscription Status",
@@ -84,32 +220,55 @@ def format_subscription_status_embed(data: dict[str, Any]) -> dict[str, Any]:
 
     pl_raw = list(data.get("players") or [])
     cl_raw = list(data.get("clans") or [])
-    pl_ids = [
-        str(item.get("membershipId") if isinstance(item, dict) else item)
-        for item in pl_raw
-        if item is not None
-    ]
-    cl_ids = [
-        str(item.get("groupId") if isinstance(item, dict) else item)
-        for item in cl_raw
-        if item is not None
-    ]
+    pl_ids = _ordered_membership_ids(pl_raw)
+    cl_ids = _ordered_group_ids(cl_raw)
     pc = len(pl_ids)
     cc = len(cl_ids)
-    max_show = 25
-    p_show = pl_ids[:max_show]
-    c_show = cl_ids[:max_show]
-    p_list = ", ".join(p_show) if p_show else "—"
-    if pc > len(p_show):
-        p_list = f"{p_list} (+{pc - len(p_show)} more)"
-    c_list = ", ".join(c_show) if c_show else "—"
-    if cc > len(c_show):
-        c_list = f"{c_list} (+{cc - len(c_show)} more)"
-    fields.append({"name": f"Player Rules ({pc})", "value": p_list[:1024], "inline": False})
-    fields.append({"name": f"Clan Rules ({cc})", "value": c_list[:1024], "inline": False})
+
+    player_cards: dict[str, dict[str, Any]] = {}
+    clan_cards: dict[str, dict[str, Any]] = {}
+    if raidhub is not None and (pl_ids or cl_ids):
+        p_res = (
+            await asyncio.gather(*[_fetch_player_basic_card(raidhub, mid) for mid in pl_ids])
+            if pl_ids
+            else []
+        )
+        c_res = (
+            await asyncio.gather(*[_fetch_clan_basic_card(raidhub, gid) for gid in cl_ids])
+            if cl_ids
+            else []
+        )
+        for mid, card in zip(pl_ids, p_res, strict=True):
+            player_cards[mid] = card if isinstance(card, dict) else {}
+        for gid, card in zip(cl_ids, c_res, strict=True):
+            clan_cards[gid] = card if isinstance(card, dict) else {}
+
+    if raidhub is None:
+        p_body = _id_only_rule_lines(pl_ids) if pl_ids else "—"
+        c_body = _id_only_rule_lines(cl_ids) if cl_ids else "—"
+    else:
+        p_lines = [_player_rule_line(mid, player_cards.get(mid, {})) for mid in pl_ids]
+        p_body = "\n".join(p_lines) if p_lines else "—"
+        if len(p_body) > 1024:
+            p_body = p_body[:1021] + "..."
+        c_lines = [_clan_rule_line(gid, clan_cards.get(gid, {})) for gid in cl_ids]
+        c_body = "\n".join(c_lines) if c_lines else "—"
+        if len(c_body) > 1024:
+            c_body = c_body[:1021] + "..."
+
+    fields.append({"name": f"Player Rules ({pc})", "value": p_body, "inline": False})
+    fields.append({"name": f"Clan Rules ({cc})", "value": c_body, "inline": False})
+
+    desc = "Current webhook destination and delivery health."
+    if raidhub is not None and (pc + cc) > 1:
+        desc = (
+            f"{desc}\n\nShowing **{pc}** player(s) and **{cc}** clan(s) by name below "
+            "(name and id view)."
+        )
+
     return base_embed(
         title="Subscription Status",
-        description="Current webhook destination and delivery health.",
+        description=desc,
         color=0x5865_F2,
         fields=fields,
     )

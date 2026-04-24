@@ -22,12 +22,24 @@ def base_embed(
     description: str,
     color: int,
     fields: list[dict[str, Any]] | None = None,
+    thumbnail_url: str | None = None,
+    author_name: str | None = None,
+    author_icon_url: str | None = None,
 ) -> dict[str, Any]:
     embed: dict[str, Any] = {
         "title": title,
         "description": description[:4096],
         "color": color,
     }
+    if author_name or author_icon_url:
+        author: dict[str, Any] = {}
+        if author_name:
+            author["name"] = author_name[:256]
+        if author_icon_url:
+            author["icon_url"] = author_icon_url[:2048]
+        embed["author"] = author
+    if thumbnail_url:
+        embed["thumbnail"] = {"url": thumbnail_url[:2048]}
     if fields:
         embed["fields"] = fields[:25]
     return {"embeds": [embed], "components": []}
@@ -37,8 +49,22 @@ def info_embed(title: str, description: str) -> dict[str, Any]:
     return base_embed(title=title, description=description, color=0x5865_F2)
 
 
-def success_embed(title: str, description: str) -> dict[str, Any]:
-    return base_embed(title=title, description=description, color=0x57_F287)
+def success_embed(
+    title: str,
+    description: str,
+    *,
+    thumbnail_url: str | None = None,
+    author_name: str | None = None,
+    author_icon_url: str | None = None,
+) -> dict[str, Any]:
+    return base_embed(
+        title=title,
+        description=description,
+        color=0x57_F287,
+        thumbnail_url=thumbnail_url,
+        author_name=author_name,
+        author_icon_url=author_icon_url,
+    )
 
 
 def warn_embed(title: str, description: str) -> dict[str, Any]:
