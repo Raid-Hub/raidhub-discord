@@ -9,6 +9,7 @@ from .subscribe_resolution import (
     bungie_emblem_url,
     format_player_display_name,
     parse_clan_group_id,
+    resolve_player_membership_id,
     resolve_player_subscription_row,
 )
 from .subscription_messages import (
@@ -170,11 +171,7 @@ async def run_unsubscribe_player_deferred(
                 ),
             )
             return
-        raw_mid = prow.get("membershipId")
-        try:
-            resolved_id = str(int(str(raw_mid).strip())) if raw_mid is not None else ""
-        except (TypeError, ValueError):
-            resolved_id = ""
+        resolved_id = await resolve_player_membership_id(raidhub, target_raw) or ""
         if not resolved_id or not resolved_id.isdigit():
             await patch_discord_followup_best_effort(
                 app_id,
