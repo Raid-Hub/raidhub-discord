@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from .schema import CommandDto, CommandOptionChoiceDto, CommandOptionDto, CommandOptionType
+from .schema import CommandDto, CommandOptionDto, CommandOptionType
 
 
 def build_commands(raid_filter_choices: list[tuple[str, int]] | None = None) -> list[CommandDto]:
-    raid_choices = [
-        CommandOptionChoiceDto(name=name[:100], value=value)
-        for name, value in (raid_filter_choices or [])
-    ][:25]
     return [
         CommandDto(
             name="instance",

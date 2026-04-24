@@ -60,9 +60,7 @@ async def fetch_subscription_status_envelope(
 def build_subscription_json_body(leaf_opts: dict[str, Any]) -> dict[str, Any]:
     body: dict[str, Any] = {}
     wn = str(
-        leaf_opts.get("discord_webhook_name")
-        or leaf_opts.get("webhook_name")
-        or ""
+        leaf_opts.get("discord_webhook_name") or leaf_opts.get("webhook_name") or ""
     ).strip()
     if wn:
         body["name"] = wn[:80]
@@ -146,13 +144,17 @@ def _ordered_group_ids(cl_raw: list[Any]) -> list[str]:
     return out
 
 
-async def _fetch_player_basic_card(raidhub: RaidHubClient, membership_id: str) -> dict[str, Any]:
+async def _fetch_player_basic_card(
+    raidhub: RaidHubClient, membership_id: str
+) -> dict[str, Any]:
     env = await raidhub.request_envelope("GET", f"/player/{membership_id}/basic")
     inner = env.get("response")
     return inner if env.get("success") and isinstance(inner, dict) else {}
 
 
-async def _fetch_clan_basic_card(raidhub: RaidHubClient, group_id: str) -> dict[str, Any]:
+async def _fetch_clan_basic_card(
+    raidhub: RaidHubClient, group_id: str
+) -> dict[str, Any]:
     env = await raidhub.request_envelope("GET", f"/clan/{group_id}/basic")
     inner = env.get("response")
     return inner if env.get("success") and isinstance(inner, dict) else {}
@@ -184,7 +186,9 @@ def _standardized_rule_string(rule: dict[str, Any]) -> str:
     return f"`fresh:{fresh}` `completed:{completed}` `{raid}`"
 
 
-def _player_rule_line(membership_id: str, card: dict[str, Any], rule: dict[str, Any]) -> str:
+def _player_rule_line(
+    membership_id: str, card: dict[str, Any], rule: dict[str, Any]
+) -> str:
     rule_suffix = _standardized_rule_string(rule)
     if card:
         label = _embed_safe_label(format_player_display_name(card))
@@ -260,10 +264,9 @@ def _rule_filters_summary(pl_raw: list[Any], cl_raw: list[Any]) -> str:
         return "—"
     fresh = _rule_filter_state(all_rules, "requireFresh")
     completed = _rule_filter_state(all_rules, "requireCompleted")
-    return (
-        f"Require Fresh: **{fresh}**\n"
-        f"Require Completed: **{completed}**"
-    )[:1024]
+    return (f"Require Fresh: **{fresh}**\n" f"Require Completed: **{completed}**")[
+        :1024
+    ]
 
 
 async def format_subscription_status_embed(
@@ -321,12 +324,16 @@ async def format_subscription_status_embed(
     clan_cards: dict[str, dict[str, Any]] = {}
     if raidhub is not None and (pl_ids or cl_ids):
         p_res = (
-            await asyncio.gather(*[_fetch_player_basic_card(raidhub, mid) for mid in pl_ids])
+            await asyncio.gather(
+                *[_fetch_player_basic_card(raidhub, mid) for mid in pl_ids]
+            )
             if pl_ids
             else []
         )
         c_res = (
-            await asyncio.gather(*[_fetch_clan_basic_card(raidhub, gid) for gid in cl_ids])
+            await asyncio.gather(
+                *[_fetch_clan_basic_card(raidhub, gid) for gid in cl_ids]
+            )
             if cl_ids
             else []
         )
@@ -406,5 +413,3 @@ def _comma_separated_digit_ids(raw: str) -> list[str]:
         if s and re.fullmatch(r"\d+", s):
             out.append(s)
     return out
-
-
