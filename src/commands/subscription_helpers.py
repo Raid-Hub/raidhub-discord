@@ -161,14 +161,26 @@ async def _fetch_clan_basic_card(raidhub: RaidHubClient, group_id: str) -> dict[
 def _standardized_rule_string(rule: dict[str, Any]) -> str:
     fresh = "yes" if bool(rule.get("requireFresh")) else "no"
     completed = "yes" if bool(rule.get("requireCompleted")) else "no"
-    raid_id = rule.get("raidId")
-    raid_path = rule.get("raidPath")
-    if raid_id is not None and str(raid_id).strip() != "":
-        raid = f"raid:{raid_id}"
-    elif raid_path:
-        raid = f"raid:{str(raid_path).strip()}"
+    raid_ids_raw = rule.get("raidIds")
+    raid_ids: list[str] = []
+    if isinstance(raid_ids_raw, list):
+        for value in raid_ids_raw:
+            s = str(value).strip()
+            if s.isdigit():
+                raid_ids.append(str(int(s)))
+
+    # Backward compatibility for old API payloads.
+    if not raid_ids:
+        legacy_raid_id = rule.get("raidId")
+        if legacy_raid_id is not None and str(legacy_raid_id).strip() != "":
+            s = str(legacy_raid_id).strip()
+            if s.isdigit():
+                raid_ids = [str(int(s))]
+
+    if raid_ids:
+        raid = f"raids:{','.join(raid_ids)}"
     else:
-        raid = "raid:all"
+        raid = "raids:all"
     return f"`fresh:{fresh}` `completed:{completed}` `{raid}`"
 
 

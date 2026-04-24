@@ -81,10 +81,7 @@ async def run_subscribe_deferred(
             filters["requireFresh"] = bool(leaf["require_fresh"])
         if "require_completed" in leaf:
             filters["requireCompleted"] = bool(leaf["require_completed"])
-        if "raid" in leaf:
-            raw_raid = leaf.get("raid")
-            if isinstance(raw_raid, int):
-                filters["raid"] = raw_raid
+        # TODO: Add raid filter input once we have a solid multi-select UX.
         if not target_raw:
             await patch_discord_followup_best_effort(
                 app_id,

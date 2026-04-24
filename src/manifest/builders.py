@@ -8,7 +8,6 @@ def build_commands(raid_filter_choices: list[tuple[str, int]] | None = None) -> 
         CommandOptionChoiceDto(name=name[:100], value=value)
         for name, value in (raid_filter_choices or [])
     ][:25]
-    raid_option_choices = raid_choices or None
     return [
         CommandDto(
             name="instance",
@@ -74,13 +73,8 @@ def build_commands(raid_filter_choices: list[tuple[str, int]] | None = None) -> 
                             description="Only send completed runs",
                             required=False,
                         ),
-                        CommandOptionDto(
-                            type=CommandOptionType.INTEGER,
-                            name="raid",
-                            description="Optional raid filter",
-                            required=False,
-                            choices=raid_option_choices,
-                        ),
+                        # TODO: Reintroduce raid filtering after finalizing a user-friendly
+                        # multi-select UX for Discord slash commands.
                     ],
                 ),
                 CommandOptionDto(
@@ -106,13 +100,8 @@ def build_commands(raid_filter_choices: list[tuple[str, int]] | None = None) -> 
                             description="Only send completed runs",
                             required=False,
                         ),
-                        CommandOptionDto(
-                            type=CommandOptionType.INTEGER,
-                            name="raid",
-                            description="Optional raid filter",
-                            required=False,
-                            choices=raid_option_choices,
-                        ),
+                        # TODO: Reintroduce raid filtering after finalizing a user-friendly
+                        # multi-select UX for Discord slash commands.
                     ],
                 ),
             ],
