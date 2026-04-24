@@ -42,8 +42,10 @@ def create_app() -> FastAPI:
 
     command_handlers: dict[str, CommandHandler] = {
         "instance": run_instance_deferred,
+        "search": run_player_search_deferred,
         "player-search": run_player_search_deferred,
         "subscribe": run_subscribe_deferred,
+        "subscription": run_subscription_deferred,
         "subscriptions": run_subscription_deferred,
         "unsubscribe": run_unsubscribe_deferred,
     }
