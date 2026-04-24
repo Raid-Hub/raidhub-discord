@@ -6,19 +6,7 @@ from .schema import CommandDto, CommandOptionDto, CommandOptionType
 def build_commands(raid_filter_choices: list[tuple[str, int]] | None = None) -> list[CommandDto]:
     return [
         CommandDto(
-            name="instance",
-            description="Lookup a RaidHub instance by id.",
-            options=[
-                CommandOptionDto(
-                    type=CommandOptionType.STRING,
-                    name="raid_instance_id",
-                    description="Instance id to lookup",
-                    required=False,
-                )
-            ],
-        ),
-        CommandDto(
-            name="player-search",
+            name="search",
             description="Search RaidHub players by Bungie name or platform name.",
             options=[
                 CommandOptionDto(
