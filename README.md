@@ -1,6 +1,6 @@
 # raidhub-discord
 
-Backend for the RaidHub Discord application: it receives [Discord interactions](https://discord.com/developers/docs/interactions/receiving-and-responding) over HTTP, checks request signatures, registers slash commands, and proxies the relevant work to the RaidHub API (search, instances, channel subscriptions, and related flows). It is meant to run as a small always-on service (for example behind your ingress), not as something you embed in other apps.
+Backend for the RaidHub Discord application: it receives [Discord interactions](https://discord.com/developers/docs/interactions/receiving-and-responding) over HTTP, checks request signatures, registers slash commands, and proxies the relevant work to the RaidHub API (search, channel subscriptions, and related flows). It is meant to run as a small always-on service (for example behind your ingress), not as something you embed in other apps.
 
 ## Quick start
 

@@ -53,7 +53,7 @@ async def run_player_search_deferred(
     except Exception as err:
         outcome = "error"
         await report_deferred_exception(
-            command="player-search",
+            command="search",
             log_key="PLAYER_SEARCH_DEFERRED_FAILED",
             err=err,
             discord_application_id=app_id,
@@ -61,7 +61,7 @@ async def run_player_search_deferred(
             user_message_payload={"content": USER_FACING_GENERIC},
         )
     finally:
-        observe_deferred_completion(command="player-search", outcome=outcome)
+        observe_deferred_completion(command="search", outcome=outcome)
 
 
 __all__ = ["register_player_search_pager", "run_player_search_deferred"]
