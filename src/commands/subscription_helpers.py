@@ -261,7 +261,7 @@ async def format_subscription_status_embed(
     if not data.get("registered"):
         return info_embed(
             "Subscription Status",
-            "No RaidHub subscription webhook is registered for this channel.",
+            "RaidHub alerts are currently turned off for this channel.",
         )
     active = "**yes**" if data.get("destinationActive") else "**no**"
     fails = int(data.get("consecutiveDeliveryFailures") or 0)
@@ -357,7 +357,7 @@ async def format_subscription_status_embed(
     fields.append({"name": f"Player Rules ({pc})", "value": p_body, "inline": False})
     fields.append({"name": f"Clan Rules ({cc})", "value": c_body, "inline": False})
 
-    desc = "Current webhook destination and delivery health."
+    desc = "Current alert delivery health and active rules."
     if raidhub is not None and (pc + cc) > 1:
         desc = (
             f"{desc}\n\nShowing **{pc}** player(s) and **{cc}** clan(s) by name below "

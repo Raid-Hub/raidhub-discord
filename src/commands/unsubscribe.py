@@ -50,16 +50,39 @@ async def run_unsubscribe_deferred(
 ) -> None:
     app_id = application_id(interaction, settings)
     token = str(interaction.get("token") or "")
+    data = interaction.get("data") or {}
+    top_opts = data.get("options") or []
+    sub = ""
+    if top_opts and isinstance(top_opts[0], dict):
+        sub = str(top_opts[0].get("name") or "").strip().lower()
+    if not sub:
+        sub = "all"
+    if sub == "player":
+        await run_unsubscribe_player_deferred(interaction, raidhub, settings)
+        return
+    if sub == "clan":
+        await run_unsubscribe_clan_deferred(interaction, raidhub, settings)
+        return
 
     outcome = "completed"
     try:
+        if sub != "all":
+            await patch_discord_followup_best_effort(
+                app_id,
+                token,
+                warn_embed(
+                    UNSUBSCRIBE_COMMAND_TITLE,
+                    "Use `/unsubscribe all`, `/unsubscribe player`, or `/unsubscribe clan`.",
+                ),
+            )
+            return
         if not interaction.get("guild_id") or not interaction.get("channel_id"):
             await patch_discord_followup_best_effort(
                 app_id,
                 token,
                 warn_embed(
                     UNSUBSCRIBE_COMMAND_TITLE,
-                    "Run `/unsubscribe` in a server text channel, not a DM.",
+                    "Run `/unsubscribe all` in a server text channel, not a DM.",
                 ),
             )
             return
@@ -86,7 +109,7 @@ async def run_unsubscribe_deferred(
             token,
             success_embed(
                 SUBSCRIPTION_REMOVED_TITLE,
-                "RaidHub will no longer use a webhook in this channel.",
+                "RaidHub alerts are now turned off for this channel.",
             ),
         )
     except Exception as err:
