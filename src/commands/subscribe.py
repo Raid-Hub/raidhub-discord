@@ -4,74 +4,36 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
-from urllib.parse import urlparse
 
 from ..config import Settings
-from ..log import handlers
 from ..prom_metrics import observe_deferred_completion
 from ..raidhub_client import RaidHubClient, discord_invocation_context
+from .subscribe_resolution import (
+    bungie_emblem_url,
+    format_player_display_name,
+    parse_clan_group_id,
+    resolve_player_membership_id,
+    resolve_player_subscription_row,
+)
+from .subscription_helpers import (
+    fetch_subscription_status_envelope,
+    format_clan_display_name,
+    subscription_active_clan_ids,
+    subscription_active_player_ids,
+    subscription_envelope_error_message,
+)
+from .subscription_routes import SUB_ROUTE_PUT
 from .shared import (
     USER_FACING_GENERIC,
     application_id,
     error_embed,
     flatten_options,
     patch_discord_followup_best_effort,
+    report_deferred_exception,
     success_embed,
     warn_embed,
 )
-from .subscription import subscription_envelope_error_message
-
-_ROUTE_PUT = "PUT subscriptions/discord/webhooks"
-
-_CLAN_GROUP_ID_PATTERNS = (
-    re.compile(r"(?:https?://)?(?:www\.)?raidhub\.io/clan/(\d+)", re.I),
-    re.compile(r"(?:https?://)?(?:www\.)?bungie\.net/[^?\s]*[?&]group(?:id|Id)=(\d+)", re.I),
-    re.compile(r"/GroupV2/(\d+)", re.I),
-    re.compile(r"/clan/(\d+)", re.I),
-)
-
-
-def parse_clan_group_id(raw: str) -> str | None:
-    s = raw.strip()
-    if not s:
-        return None
-    if re.fullmatch(r"\d+", s):
-        return s
-    for pat in _CLAN_GROUP_ID_PATTERNS:
-        m = pat.search(s)
-        if m:
-            return m.group(1)
-    try:
-        path = urlparse(s).path or ""
-        for seg in reversed([p for p in path.split("/") if p]):
-            if seg.isdigit() and len(seg) >= 5:
-                return seg
-    except Exception:
-        pass
-    return None
-
-
-async def resolve_player_membership_id(raidhub: RaidHubClient, raw: str) -> str | None:
-    q = raw.strip()
-    if not q:
-        return None
-    if re.fullmatch(r"\d+", q):
-        return q
-    env = await raidhub.request_envelope(
-        "GET",
-        "/player/search",
-        params={"query": q, "count": 1, "offset": 0},
-    )
-    if not env.get("success"):
-        return None
-    inner = env.get("response") or {}
-    results = list(inner.get("results") or [])
-    if not results:
-        return None
-    mid = results[0].get("membershipId")
-    return str(mid) if mid is not None else None
 
 
 async def run_subscribe_deferred(
@@ -106,12 +68,7 @@ async def run_subscribe_deferred(
             return
 
         leaf = flatten_options(top_opts[0].get("options"))
-        target_raw = str(
-            leaf.get("player_id_or_search_text")
-            or leaf.get("clan_group_id_or_url")
-            or leaf.get("target")
-            or ""
-        ).strip()
+        target_raw = str(leaf.get("player") or leaf.get("clan") or "").strip()
         if not target_raw:
             await patch_discord_followup_best_effort(
                 app_id,
@@ -134,9 +91,23 @@ async def run_subscribe_deferred(
             )
             return
 
+        status_env = await fetch_subscription_status_envelope(raidhub, interaction)
+        if not status_env.get("success"):
+            await patch_discord_followup_best_effort(
+                app_id,
+                token,
+                error_embed(
+                    "Subscribe Failed",
+                    subscription_envelope_error_message(status_env),
+                ),
+            )
+            return
+        status_inner = status_env.get("response") or {}
+        registered = bool(status_inner.get("registered"))
+
         if sub == "player":
-            mid = await resolve_player_membership_id(raidhub, target_raw)
-            if not mid:
+            prow = await resolve_player_subscription_row(raidhub, target_raw)
+            if not prow:
                 await patch_discord_followup_best_effort(
                     app_id,
                     token,
@@ -147,9 +118,30 @@ async def run_subscribe_deferred(
                     ),
                 )
                 return
-            resolved_id = mid
-            kind_label = "player"
-            body: dict[str, Any] = {"targets": {"playerMembershipIds": [resolved_id]}}
+            raw_mid = prow.get("membershipId")
+            resolved_id = str(int(str(raw_mid).strip())) if raw_mid is not None else ""
+            if not resolved_id or not resolved_id.isdigit():
+                await patch_discord_followup_best_effort(
+                    app_id,
+                    token,
+                    error_embed("Player Not Found", "Missing membership id for that player."),
+                )
+                return
+            if registered:
+                merged_players = subscription_active_player_ids(status_inner)
+                if resolved_id not in merged_players:
+                    merged_players.append(resolved_id)
+                merged_players.sort()
+                body: dict[str, Any] = {"targets": {"playerMembershipIds": merged_players}}
+            else:
+                body = {"targets": {"playerMembershipIds": [resolved_id]}}
+            display_name = format_player_display_name(prow)
+            icon_raw = prow.get("iconPath")
+            thumb_url = (
+                bungie_emblem_url(str(icon_raw))
+                if isinstance(icon_raw, str)
+                else bungie_emblem_url(None)
+            )
         else:
             gid = parse_clan_group_id(target_raw)
             if not gid:
@@ -163,11 +155,17 @@ async def run_subscribe_deferred(
                     ),
                 )
                 return
-            resolved_id = gid
-            kind_label = "clan"
-            body = {"targets": {"clanGroupIds": [resolved_id]}}
+            resolved_id = str(int(gid))
+            if registered:
+                merged_clans = subscription_active_clan_ids(status_inner)
+                if resolved_id not in merged_clans:
+                    merged_clans.append(resolved_id)
+                merged_clans.sort()
+                body = {"targets": {"clanGroupIds": merged_clans}}
+            else:
+                body = {"targets": {"clanGroupIds": [resolved_id]}}
 
-        ctx = discord_invocation_context(interaction, route_id=_ROUTE_PUT)
+        ctx = discord_invocation_context(interaction, route_id=SUB_ROUTE_PUT)
         env = await raidhub.request_envelope(
             "PUT",
             "/subscriptions/discord/webhooks",
@@ -186,30 +184,49 @@ async def run_subscribe_deferred(
             )
             return
 
-        inner_put = env.get("response") or {}
-        action = (
-            "updated"
-            if inner_put.get("updated")
-            else "registered"
-            if inner_put.get("created") or inner_put.get("webhookUrl")
-            else "saved"
-        )
-        await patch_discord_followup_best_effort(
-            app_id,
-            token,
-            success_embed(
+        if sub == "player":
+            desc = (
+                f"Subscribed to **{display_name}** (`{resolved_id}`) for this channel. "
+                "Use `/subscription status` to see all rules for this channel."
+            )
+            msg = success_embed(
                 "Subscription Saved",
-                f"Subscribed ({action}) to {kind_label} `{resolved_id}` for this channel. "
-                "Use `/subscription status` to inspect delivery health and rules.",
-            ),
-        )
+                desc,
+                thumbnail_url=thumb_url,
+            )
+        else:
+            c_env = await raidhub.request_envelope("GET", f"/clan/{resolved_id}/basic")
+            clan_row: dict[str, Any] = {}
+            if c_env.get("success") and isinstance(c_env.get("response"), dict):
+                clan_row = c_env["response"]
+            c_disp = (
+                format_clan_display_name(clan_row) if clan_row else f"Clan `{resolved_id}`"
+            )
+            apath = clan_row.get("avatarPath")
+            c_thumb = (
+                bungie_emblem_url(str(apath))
+                if clan_row and isinstance(apath, str)
+                else None
+            )
+            desc = (
+                f"Subscribed to **{c_disp}** (`{resolved_id}`) for this channel. "
+                "Use `/subscription status` to see all rules for this channel."
+            )
+            msg = success_embed(
+                "Subscription Saved",
+                desc,
+                thumbnail_url=c_thumb,
+            )
+        await patch_discord_followup_best_effort(app_id, token, msg)
     except Exception as err:
         outcome = "error"
-        handlers.error("SUBSCRIBE_DEFERRED_FAILED", err, {})
-        await patch_discord_followup_best_effort(
-            app_id,
-            token,
-            error_embed("Subscribe Failed", USER_FACING_GENERIC),
+        await report_deferred_exception(
+            command="subscribe",
+            log_key="SUBSCRIBE_DEFERRED_FAILED",
+            err=err,
+            discord_application_id=app_id,
+            interaction_token=token,
+            user_message_payload=error_embed("Subscribe Failed", USER_FACING_GENERIC),
         )
     finally:
         observe_deferred_completion(command="subscribe", outcome=outcome)

@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "raidhub-discord"
 version = "0.1.0"
@@ -12,10 +16,15 @@ dependencies = [
   "python-dotenv",
   "PyJWT",
   "prometheus-client",
+  "sentry-sdk[fastapi]",
 ]
 
 [project.scripts]
-sync-discord-commands = "cli_sync_commands:cli"
+sync-discord-commands = "src.cli_sync_commands:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src"]
 
 [project.optional-dependencies]
 dev = [
@@ -29,3 +38,4 @@ line-length = 100
 [tool.mypy]
 python_version = "3.14"
 strict = false
+ignore_missing_imports = true

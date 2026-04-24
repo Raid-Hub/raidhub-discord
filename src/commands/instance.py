@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 from ..config import Settings
-from ..log import handlers
 from ..prom_metrics import observe_deferred_completion
 from ..raidhub_client import RaidHubClient
 from .shared import (
@@ -12,6 +11,7 @@ from .shared import (
     discord_message_for_failed_envelope,
     flatten_options,
     patch_discord_followup_best_effort,
+    report_deferred_exception,
 )
 
 
@@ -102,9 +102,13 @@ async def run_instance_deferred(
         await patch_discord_followup_best_effort(app_id, token, {"embeds": [embed]})
     except Exception as err:
         outcome = "error"
-        handlers.error("INSTANCE_DEFERRED_FAILED", err, {})
-        await patch_discord_followup_best_effort(
-            app_id, token, {"content": USER_FACING_GENERIC}
+        await report_deferred_exception(
+            command="instance",
+            log_key="INSTANCE_DEFERRED_FAILED",
+            err=err,
+            discord_application_id=app_id,
+            interaction_token=token,
+            user_message_payload={"content": USER_FACING_GENERIC},
         )
     finally:
         observe_deferred_completion(command="instance", outcome=outcome)

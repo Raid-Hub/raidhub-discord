@@ -19,6 +19,11 @@ class Settings:
     raidhub_api_base_url: str
     raidhub_api_key: str
     raidhub_jwt_secret: str
+    sentry_dsn: str
+    sentry_environment: str
+    sentry_release: str
+    sentry_send_default_pii: bool
+    sentry_traces_sample_rate: float
 
 
 def get_settings() -> Settings:
@@ -35,4 +40,14 @@ def get_settings() -> Settings:
         ).strip(),
         raidhub_api_key=os.getenv("RAIDHUB_API_KEY", "").strip(),
         raidhub_jwt_secret=os.getenv("RAIDHUB_JWT_SECRET", "").strip(),
+        sentry_dsn=os.getenv("SENTRY_DSN", "").strip(),
+        sentry_environment=os.getenv("SENTRY_ENVIRONMENT", "development").strip(),
+        sentry_release=os.getenv("SENTRY_RELEASE", "").strip(),
+        sentry_send_default_pii=os.getenv("SENTRY_SEND_DEFAULT_PII", "true")
+        .strip()
+        .lower()
+        == "true",
+        sentry_traces_sample_rate=float(
+            os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1").strip()
+        ),
     )
