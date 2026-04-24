@@ -13,7 +13,6 @@ from .subscribe_resolution import (
     bungie_emblem_url,
     format_player_display_name,
     parse_clan_group_id,
-    resolve_player_membership_id,
     resolve_player_subscription_row,
 )
 from .subscription_messages import (
@@ -136,7 +135,10 @@ async def run_subscribe_deferred(
                 )
                 return
             raw_mid = prow.get("membershipId")
-            resolved_id = str(int(str(raw_mid).strip())) if raw_mid is not None else ""
+            try:
+                resolved_id = str(int(str(raw_mid).strip())) if raw_mid is not None else ""
+            except (TypeError, ValueError):
+                resolved_id = ""
             if not resolved_id or not resolved_id.isdigit():
                 await patch_discord_followup_best_effort(
                     app_id,
@@ -258,4 +260,4 @@ async def run_subscribe_deferred(
         observe_deferred_completion(command="subscribe", outcome=outcome)
 
 
-__all__ = ["run_subscribe_deferred", "resolve_player_membership_id", "parse_clan_group_id"]
+__all__ = ["run_subscribe_deferred", "parse_clan_group_id"]
