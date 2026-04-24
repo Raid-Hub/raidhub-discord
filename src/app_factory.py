@@ -16,9 +16,7 @@ from .commands import (
     run_player_search_deferred,
     run_subscribe_deferred,
     run_subscription_deferred,
-    run_unsubscribe_clan_deferred,
     run_unsubscribe_deferred,
-    run_unsubscribe_player_deferred,
 )
 from .config import Settings, get_settings
 from .discord_auth import verify_discord_signature_with_reason
@@ -48,8 +46,6 @@ def create_app() -> FastAPI:
         "subscribe": run_subscribe_deferred,
         "subscription": run_subscription_deferred,
         "unsubscribe": run_unsubscribe_deferred,
-        "unsubscribe-player": run_unsubscribe_player_deferred,
-        "unsubscribe-clan": run_unsubscribe_clan_deferred,
     }
 
     def _msg(content: str) -> dict[str, Any]:
