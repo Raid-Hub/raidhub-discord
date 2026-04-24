@@ -34,7 +34,7 @@ def subscription_active_clan_ids(inner: dict[str, Any]) -> list[str]:
     out: list[str] = []
     for item in inner.get("clans") or []:
         if isinstance(item, dict):
-            raw = item.get("groupId")
+            raw = item.get("groupId") or item.get("clanGroupId")
         else:
             raw = item
         if raw is None:
@@ -132,7 +132,10 @@ def _ordered_membership_ids(pl_raw: list[Any]) -> list[str]:
 def _ordered_group_ids(cl_raw: list[Any]) -> list[str]:
     out: list[str] = []
     for item in cl_raw:
-        raw = item.get("groupId") if isinstance(item, dict) else item
+        if isinstance(item, dict):
+            raw = item.get("groupId") or item.get("clanGroupId")
+        else:
+            raw = item
         if raw is None:
             continue
         s = str(raw).strip()
@@ -155,20 +158,36 @@ async def _fetch_clan_basic_card(raidhub: RaidHubClient, group_id: str) -> dict[
     return inner if env.get("success") and isinstance(inner, dict) else {}
 
 
-def _player_rule_line(membership_id: str, card: dict[str, Any]) -> str:
+def _standardized_rule_string(rule: dict[str, Any]) -> str:
+    fresh = "yes" if bool(rule.get("requireFresh")) else "no"
+    completed = "yes" if bool(rule.get("requireCompleted")) else "no"
+    raid_id = rule.get("raidId")
+    raid_path = rule.get("raidPath")
+    if raid_id is not None and str(raid_id).strip() != "":
+        raid = f"raid:{raid_id}"
+    elif raid_path:
+        raid = f"raid:{str(raid_path).strip()}"
+    else:
+        raid = "raid:all"
+    return f"`fresh:{fresh}` `completed:{completed}` `{raid}`"
+
+
+def _player_rule_line(membership_id: str, card: dict[str, Any], rule: dict[str, Any]) -> str:
+    rule_suffix = _standardized_rule_string(rule)
     if card:
         label = _embed_safe_label(format_player_display_name(card))
         url = _raidhub_player_url(membership_id)
-        return f"• [{label}]({url}) · `{membership_id}`"
-    return f"• `{membership_id}`"
+        return f"• [{label}]({url}) · `{membership_id}` · {rule_suffix}"
+    return f"• `{membership_id}` · {rule_suffix}"
 
 
-def _clan_rule_line(group_id: str, card: dict[str, Any]) -> str:
+def _clan_rule_line(group_id: str, card: dict[str, Any], rule: dict[str, Any]) -> str:
+    rule_suffix = _standardized_rule_string(rule)
     if card:
         label = _embed_safe_label(format_clan_display_name(card))
         url = _raidhub_clan_url(group_id)
-        return f"• [{label}]({url}) · `{group_id}`"
-    return f"• `{group_id}`"
+        return f"• [{label}]({url}) · `{group_id}` · {rule_suffix}"
+    return f"• `{group_id}` · {rule_suffix}"
 
 
 def _id_only_rule_lines(ids: list[str]) -> str:
@@ -180,6 +199,59 @@ def _id_only_rule_lines(ids: list[str]) -> str:
     if extra > 0:
         body = f"{body}\n… and **{extra}** more (showing names requires API access)."
     return body[:1024]
+
+
+def _indexed_player_rules(pl_raw: list[Any]) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for item in pl_raw:
+        if not isinstance(item, dict):
+            continue
+        raw = item.get("membershipId")
+        if raw is None:
+            continue
+        s = str(raw).strip()
+        if not s.isdigit():
+            continue
+        out[str(int(s))] = item
+    return out
+
+
+def _indexed_clan_rules(cl_raw: list[Any]) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for item in cl_raw:
+        if not isinstance(item, dict):
+            continue
+        raw = item.get("groupId") or item.get("clanGroupId")
+        if raw is None:
+            continue
+        s = str(raw).strip()
+        if not s.isdigit():
+            continue
+        out[str(int(s))] = item
+    return out
+
+
+def _rule_filter_state(items: list[Any], key: str) -> str:
+    values = [item.get(key) for item in items if isinstance(item, dict) and key in item]
+    bool_values = [bool(v) for v in values if isinstance(v, bool)]
+    if not bool_values:
+        return "unset"
+    uniq = set(bool_values)
+    if len(uniq) > 1:
+        return "mixed"
+    return "yes" if True in uniq else "no"
+
+
+def _rule_filters_summary(pl_raw: list[Any], cl_raw: list[Any]) -> str:
+    all_rules = [*pl_raw, *cl_raw]
+    if not all_rules:
+        return "—"
+    fresh = _rule_filter_state(all_rules, "requireFresh")
+    completed = _rule_filter_state(all_rules, "requireCompleted")
+    return (
+        f"Require Fresh: **{fresh}**\n"
+        f"Require Completed: **{completed}**"
+    )[:1024]
 
 
 async def format_subscription_status_embed(
@@ -195,7 +267,6 @@ async def format_subscription_status_embed(
     fails = int(data.get("consecutiveDeliveryFailures") or 0)
     fields: list[dict[str, Any]] = [
         {"name": "Destination Active", "value": active, "inline": True},
-        {"name": "Webhook ID", "value": f"`{data.get('webhookId', '—')}`", "inline": True},
         {"name": "Delivery Failures", "value": f"**{fails}**", "inline": True},
     ]
     ls = data.get("lastDeliverySuccessAt")
@@ -222,8 +293,17 @@ async def format_subscription_status_embed(
     cl_raw = list(data.get("clans") or [])
     pl_ids = _ordered_membership_ids(pl_raw)
     cl_ids = _ordered_group_ids(cl_raw)
+    player_rules = _indexed_player_rules(pl_raw)
+    clan_rules = _indexed_clan_rules(cl_raw)
     pc = len(pl_ids)
     cc = len(cl_ids)
+    fields.append(
+        {
+            "name": "Rule Filters",
+            "value": _rule_filters_summary(pl_raw, cl_raw),
+            "inline": False,
+        }
+    )
 
     player_cards: dict[str, dict[str, Any]] = {}
     clan_cards: dict[str, dict[str, Any]] = {}
@@ -244,14 +324,32 @@ async def format_subscription_status_embed(
             clan_cards[gid] = card if isinstance(card, dict) else {}
 
     if raidhub is None:
-        p_body = _id_only_rule_lines(pl_ids) if pl_ids else "—"
-        c_body = _id_only_rule_lines(cl_ids) if cl_ids else "—"
+        p_lines = [
+            f"• `{mid}` · {_standardized_rule_string(player_rules.get(mid, {}))}"
+            for mid in pl_ids
+        ]
+        p_body = "\n".join(p_lines) if p_lines else "—"
+        c_lines = [
+            f"• `{gid}` · {_standardized_rule_string(clan_rules.get(gid, {}))}"
+            for gid in cl_ids
+        ]
+        c_body = "\n".join(c_lines) if c_lines else "—"
+        if len(p_body) > 1024:
+            p_body = p_body[:1021] + "..."
+        if len(c_body) > 1024:
+            c_body = c_body[:1021] + "..."
     else:
-        p_lines = [_player_rule_line(mid, player_cards.get(mid, {})) for mid in pl_ids]
+        p_lines = [
+            _player_rule_line(mid, player_cards.get(mid, {}), player_rules.get(mid, {}))
+            for mid in pl_ids
+        ]
         p_body = "\n".join(p_lines) if p_lines else "—"
         if len(p_body) > 1024:
             p_body = p_body[:1021] + "..."
-        c_lines = [_clan_rule_line(gid, clan_cards.get(gid, {})) for gid in cl_ids]
+        c_lines = [
+            _clan_rule_line(gid, clan_cards.get(gid, {}), clan_rules.get(gid, {}))
+            for gid in cl_ids
+        ]
         c_body = "\n".join(c_lines) if c_lines else "—"
         if len(c_body) > 1024:
             c_body = c_body[:1021] + "..."

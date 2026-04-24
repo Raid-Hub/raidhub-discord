@@ -85,7 +85,50 @@ class FormatSubscriptionStatusEmbedTests(unittest.TestCase):
         )
         fields = {f["name"]: f["value"] for f in out["embeds"][0]["fields"]}
         self.assertIn("Destination Active", fields)
-        self.assertIn("`123`", fields["Webhook ID"])
+        self.assertIn("Delivery Failures", fields)
+        self.assertEqual(fields["Rule Filters"], "—")
+
+    def test_registered_uses_clan_group_id_key(self) -> None:
+        out = asyncio.run(
+            format_subscription_status_embed(
+                None,
+                {
+                    "registered": True,
+                    "destinationActive": True,
+                    "consecutiveDeliveryFailures": 0,
+                    "clans": [{"clanGroupId": "4927161"}],
+                },
+            )
+        )
+        fields = {f["name"]: f["value"] for f in out["embeds"][0]["fields"]}
+        self.assertIn("• `4927161`", fields["Clan Rules (1)"])
+        self.assertIn("`raid:all`", fields["Clan Rules (1)"])
+        self.assertIn("Require Fresh", fields["Rule Filters"])
+
+    def test_registered_rule_filters_summary(self) -> None:
+        out = asyncio.run(
+            format_subscription_status_embed(
+                None,
+                {
+                    "registered": True,
+                    "destinationActive": True,
+                    "consecutiveDeliveryFailures": 0,
+                    "players": [
+                        {
+                            "membershipId": "4611686018488107374",
+                            "requireFresh": True,
+                            "requireCompleted": False,
+                        }
+                    ],
+                    "clans": [{"groupId": "4927161", "requireFresh": True, "requireCompleted": False}],
+                },
+            )
+        )
+        fields = {f["name"]: f["value"] for f in out["embeds"][0]["fields"]}
+        self.assertIn("**yes**", fields["Rule Filters"])
+        self.assertIn("**no**", fields["Rule Filters"])
+        self.assertIn("`fresh:yes`", fields["Player Rules (1)"])
+        self.assertIn("`completed:no`", fields["Player Rules (1)"])
 
 
 class SubscriptionRulesSuffixTests(unittest.TestCase):

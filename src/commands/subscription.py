@@ -5,6 +5,11 @@ from typing import Any
 from ..config import Settings
 from ..prom_metrics import observe_deferred_completion
 from ..raidhub_client import RaidHubClient, discord_invocation_context
+from .subscription_messages import (
+    SUBSCRIPTION_COMMAND_TITLE,
+    SUBSCRIPTION_REMOVED_TITLE,
+    SUBSCRIPTION_REQUEST_FAILED_TITLE,
+)
 from .subscription_helpers import (
     format_subscription_status_embed,
     subscription_envelope_error_message,
@@ -37,7 +42,7 @@ async def run_subscription_deferred(
                 app_id,
                 token,
                 warn_embed(
-                    "Subscription Command",
+                    SUBSCRIPTION_COMMAND_TITLE,
                     "Pick `status` or `delete` under `/subscription`.",
                 ),
             )
@@ -48,7 +53,10 @@ async def run_subscription_deferred(
             await patch_discord_followup_best_effort(
                 app_id,
                 token,
-                warn_embed("Subscription Command", "Unknown `/subscription` subcommand."),
+                warn_embed(
+                    SUBSCRIPTION_COMMAND_TITLE,
+                    "Unknown `/subscription` subcommand.",
+                ),
             )
             return
 
@@ -57,7 +65,7 @@ async def run_subscription_deferred(
                 app_id,
                 token,
                 warn_embed(
-                    "Subscription Command",
+                    SUBSCRIPTION_COMMAND_TITLE,
                     "Run this command in a server channel, not a DM.",
                 ),
             )
@@ -84,7 +92,7 @@ async def run_subscription_deferred(
                 app_id,
                 token,
                 error_embed(
-                    "Subscription Request Failed",
+                    SUBSCRIPTION_REQUEST_FAILED_TITLE,
                     subscription_envelope_error_message(env),
                 ),
             )
@@ -95,7 +103,7 @@ async def run_subscription_deferred(
             msg = await format_subscription_status_embed(raidhub, inner)
         else:
             msg = success_embed(
-                "Subscription Removed",
+                SUBSCRIPTION_REMOVED_TITLE,
                 "RaidHub will no longer use a webhook in this channel.",
             )
 

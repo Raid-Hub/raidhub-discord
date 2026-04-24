@@ -5,9 +5,27 @@ from typing import Any
 from ..config import Settings
 from ..prom_metrics import observe_deferred_completion
 from ..raidhub_client import RaidHubClient, discord_invocation_context
-from .subscribe_resolution import parse_clan_group_id, resolve_player_membership_id
+from .subscribe_resolution import (
+    bungie_emblem_url,
+    format_player_display_name,
+    parse_clan_group_id,
+    resolve_player_subscription_row,
+)
+from .subscription_messages import (
+    CLAN_ID_NOT_RECOGNIZED_TITLE,
+    CLAN_UNSUBSCRIBED_TITLE,
+    PLAYER_NOT_FOUND_TITLE,
+    PLAYER_UNSUBSCRIBED_TITLE,
+    SUBSCRIPTION_REMOVED_TITLE,
+    UNSUBSCRIBE_CLAN_TITLE,
+    UNSUBSCRIBE_COMMAND_TITLE,
+    UNSUBSCRIBE_FAILED_TITLE,
+    UNSUBSCRIBE_PLAYER_TITLE,
+    unsubscribe_success_description,
+)
 from .subscription_helpers import (
     fetch_subscription_status_envelope,
+    format_clan_display_name,
     subscription_active_clan_ids,
     subscription_active_player_ids,
     subscription_envelope_error_message,
@@ -34,12 +52,37 @@ async def run_unsubscribe_deferred(
     token = str(interaction.get("token") or "")
     outcome = "completed"
     try:
+        data = interaction.get("data") or {}
+        top_opts = data.get("options") or []
+        sub = ""
+        if top_opts and isinstance(top_opts[0], dict):
+            sub = str(top_opts[0].get("name") or "").strip().lower()
+        if not sub:
+            sub = "delete"
+
+        if sub == "player":
+            await run_unsubscribe_player_deferred(interaction, raidhub, settings)
+            return
+        if sub == "clan":
+            await run_unsubscribe_clan_deferred(interaction, raidhub, settings)
+            return
+        if sub != "delete":
+            await patch_discord_followup_best_effort(
+                app_id,
+                token,
+                warn_embed(
+                    UNSUBSCRIBE_COMMAND_TITLE,
+                    "Use `/unsubscribe delete`, `/unsubscribe player`, or `/unsubscribe clan`.",
+                ),
+            )
+            return
+
         if not interaction.get("guild_id") or not interaction.get("channel_id"):
             await patch_discord_followup_best_effort(
                 app_id,
                 token,
                 warn_embed(
-                    "Unsubscribe Command",
+                    UNSUBSCRIBE_COMMAND_TITLE,
                     "Run `/unsubscribe` in a server text channel, not a DM.",
                 ),
             )
@@ -56,7 +99,7 @@ async def run_unsubscribe_deferred(
                 app_id,
                 token,
                 error_embed(
-                    "Unsubscribe Failed",
+                    UNSUBSCRIBE_FAILED_TITLE,
                     subscription_envelope_error_message(env),
                 ),
             )
@@ -66,7 +109,7 @@ async def run_unsubscribe_deferred(
             app_id,
             token,
             success_embed(
-                "Subscription Removed",
+                SUBSCRIPTION_REMOVED_TITLE,
                 "RaidHub will no longer use a webhook in this channel.",
             ),
         )
@@ -78,7 +121,7 @@ async def run_unsubscribe_deferred(
             err=err,
             discord_application_id=app_id,
             interaction_token=token,
-            user_message_payload=error_embed("Unsubscribe Failed", USER_FACING_GENERIC),
+            user_message_payload=error_embed(UNSUBSCRIBE_FAILED_TITLE, USER_FACING_GENERIC),
         )
     finally:
         observe_deferred_completion(command="unsubscribe", outcome=outcome)
@@ -100,7 +143,7 @@ async def run_unsubscribe_player_deferred(
                 app_id,
                 token,
                 warn_embed(
-                    "Unsubscribe Player",
+                    UNSUBSCRIBE_PLAYER_TITLE,
                     "Provide a Destiny membership id or player search text.",
                 ),
             )
@@ -111,21 +154,30 @@ async def run_unsubscribe_player_deferred(
                 app_id,
                 token,
                 warn_embed(
-                    "Unsubscribe Player",
+                    UNSUBSCRIBE_PLAYER_TITLE,
                     "Run this command in a server text channel, not a DM.",
                 ),
             )
             return
 
-        resolved_id = await resolve_player_membership_id(raidhub, target_raw)
-        if not resolved_id:
+        prow = await resolve_player_subscription_row(raidhub, target_raw)
+        if not prow:
             await patch_discord_followup_best_effort(
                 app_id,
                 token,
                 error_embed(
-                    "Player Not Found",
+                    PLAYER_NOT_FOUND_TITLE,
                     "Could not resolve that player. Try a membership id or a clearer name.",
                 ),
+            )
+            return
+        raw_mid = prow.get("membershipId")
+        resolved_id = str(int(str(raw_mid).strip())) if raw_mid is not None else ""
+        if not resolved_id or not resolved_id.isdigit():
+            await patch_discord_followup_best_effort(
+                app_id,
+                token,
+                error_embed(PLAYER_NOT_FOUND_TITLE, "Missing membership id for that player."),
             )
             return
 
@@ -135,7 +187,7 @@ async def run_unsubscribe_player_deferred(
                 app_id,
                 token,
                 error_embed(
-                    "Unsubscribe Failed",
+                    UNSUBSCRIBE_FAILED_TITLE,
                     subscription_envelope_error_message(status_env),
                 ),
             )
@@ -146,7 +198,7 @@ async def run_unsubscribe_player_deferred(
                 app_id,
                 token,
                 warn_embed(
-                    "Unsubscribe Player",
+                    UNSUBSCRIBE_PLAYER_TITLE,
                     "This channel has no RaidHub subscription to update.",
                 ),
             )
@@ -158,7 +210,7 @@ async def run_unsubscribe_player_deferred(
                 app_id,
                 token,
                 warn_embed(
-                    "Unsubscribe Player",
+                    UNSUBSCRIBE_PLAYER_TITLE,
                     f"This channel is not subscribed to player `{resolved_id}`.",
                 ),
             )
@@ -179,7 +231,7 @@ async def run_unsubscribe_player_deferred(
                 app_id,
                 token,
                 error_embed(
-                    "Unsubscribe Failed",
+                    UNSUBSCRIBE_FAILED_TITLE,
                     subscription_envelope_error_message(env),
                 ),
             )
@@ -189,9 +241,12 @@ async def run_unsubscribe_player_deferred(
             app_id,
             token,
             success_embed(
-                "Player Unsubscribed",
-                f"Removed player `{resolved_id}` from this channel. Other subscription rules are"
-                " unchanged.",
+                PLAYER_UNSUBSCRIBED_TITLE,
+                unsubscribe_success_description(
+                    format_player_display_name(prow),
+                    resolved_id,
+                ),
+                thumbnail_url=bungie_emblem_url(str(prow.get("iconPath") or "")),
             ),
         )
     except Exception as err:
@@ -202,7 +257,7 @@ async def run_unsubscribe_player_deferred(
             err=err,
             discord_application_id=app_id,
             interaction_token=token,
-            user_message_payload=error_embed("Unsubscribe Failed", USER_FACING_GENERIC),
+            user_message_payload=error_embed(UNSUBSCRIBE_FAILED_TITLE, USER_FACING_GENERIC),
         )
     finally:
         observe_deferred_completion(command="unsubscribe-player", outcome=outcome)
@@ -224,7 +279,7 @@ async def run_unsubscribe_clan_deferred(
                 app_id,
                 token,
                 warn_embed(
-                    "Unsubscribe Clan",
+                    UNSUBSCRIBE_CLAN_TITLE,
                     "Provide a clan group id or clan URL.",
                 ),
             )
@@ -235,7 +290,7 @@ async def run_unsubscribe_clan_deferred(
                 app_id,
                 token,
                 warn_embed(
-                    "Unsubscribe Clan",
+                    UNSUBSCRIBE_CLAN_TITLE,
                     "Run this command in a server text channel, not a DM.",
                 ),
             )
@@ -247,7 +302,7 @@ async def run_unsubscribe_clan_deferred(
                 app_id,
                 token,
                 error_embed(
-                    "Clan ID Not Recognized",
+                    CLAN_ID_NOT_RECOGNIZED_TITLE,
                     "Could not parse a clan group id from that value.",
                 ),
             )
@@ -260,7 +315,7 @@ async def run_unsubscribe_clan_deferred(
                 app_id,
                 token,
                 error_embed(
-                    "Unsubscribe Failed",
+                    UNSUBSCRIBE_FAILED_TITLE,
                     subscription_envelope_error_message(status_env),
                 ),
             )
@@ -271,7 +326,7 @@ async def run_unsubscribe_clan_deferred(
                 app_id,
                 token,
                 warn_embed(
-                    "Unsubscribe Clan",
+                    UNSUBSCRIBE_CLAN_TITLE,
                     "This channel has no RaidHub subscription to update.",
                 ),
             )
@@ -283,7 +338,7 @@ async def run_unsubscribe_clan_deferred(
                 app_id,
                 token,
                 warn_embed(
-                    "Unsubscribe Clan",
+                    UNSUBSCRIBE_CLAN_TITLE,
                     f"This channel is not subscribed to clan `{resolved_id}`.",
                 ),
             )
@@ -304,19 +359,28 @@ async def run_unsubscribe_clan_deferred(
                 app_id,
                 token,
                 error_embed(
-                    "Unsubscribe Failed",
+                    UNSUBSCRIBE_FAILED_TITLE,
                     subscription_envelope_error_message(env),
                 ),
             )
             return
 
+        c_env = await raidhub.request_envelope("GET", f"/clan/{resolved_id}/basic")
+        clan_row: dict[str, Any] = {}
+        if c_env.get("success") and isinstance(c_env.get("response"), dict):
+            clan_row = c_env["response"]
+        c_disp = format_clan_display_name(clan_row) if clan_row else f"Clan `{resolved_id}`"
+        c_thumb = (
+            bungie_emblem_url(str(clan_row.get("avatarPath") or "")) if clan_row else None
+        )
+
         await patch_discord_followup_best_effort(
             app_id,
             token,
             success_embed(
-                "Clan Unsubscribed",
-                f"Removed clan `{resolved_id}` from this channel. Other subscription rules are"
-                " unchanged.",
+                CLAN_UNSUBSCRIBED_TITLE,
+                unsubscribe_success_description(c_disp, resolved_id),
+                thumbnail_url=c_thumb,
             ),
         )
     except Exception as err:
@@ -327,7 +391,7 @@ async def run_unsubscribe_clan_deferred(
             err=err,
             discord_application_id=app_id,
             interaction_token=token,
-            user_message_payload=error_embed("Unsubscribe Failed", USER_FACING_GENERIC),
+            user_message_payload=error_embed(UNSUBSCRIBE_FAILED_TITLE, USER_FACING_GENERIC),
         )
     finally:
         observe_deferred_completion(command="unsubscribe-clan", outcome=outcome)

@@ -19,12 +19,25 @@ class CommandOptionType(IntEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class CommandOptionChoiceDto:
+    name: str
+    value: str | int
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "value": self.value,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class CommandOptionDto:
     type: CommandOptionType
     name: str
     description: str
     required: bool | None = None
     options: list["CommandOptionDto"] | None = None
+    choices: list[CommandOptionChoiceDto] | None = None
 
     def to_json(self) -> dict[str, Any]:
         data: dict[str, Any] = {
@@ -34,6 +47,8 @@ class CommandOptionDto:
         }
         if self.required is not None:
             data["required"] = self.required
+        if self.choices is not None:
+            data["choices"] = [c.to_json() for c in self.choices]
         if self.options is not None:
             data["options"] = [o.to_json() for o in self.options]
         return data

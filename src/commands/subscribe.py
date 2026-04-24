@@ -16,6 +16,14 @@ from .subscribe_resolution import (
     resolve_player_membership_id,
     resolve_player_subscription_row,
 )
+from .subscription_messages import (
+    CLAN_ID_NOT_RECOGNIZED_TITLE,
+    PLAYER_NOT_FOUND_TITLE,
+    SUBSCRIBE_COMMAND_TITLE,
+    SUBSCRIBE_FAILED_TITLE,
+    SUBSCRIPTION_SAVED_TITLE,
+    subscribe_success_description,
+)
 from .subscription_helpers import (
     fetch_subscription_status_envelope,
     format_clan_display_name,
@@ -52,7 +60,7 @@ async def run_subscribe_deferred(
                 app_id,
                 token,
                 warn_embed(
-                    "Subscribe Command",
+                    SUBSCRIBE_COMMAND_TITLE,
                     "Use `/subscribe player` or `/subscribe clan` with a target.",
                 ),
             )
@@ -63,18 +71,27 @@ async def run_subscribe_deferred(
             await patch_discord_followup_best_effort(
                 app_id,
                 token,
-                warn_embed("Subscribe Command", "Unknown `/subscribe` subcommand."),
+                warn_embed(SUBSCRIBE_COMMAND_TITLE, "Unknown `/subscribe` subcommand."),
             )
             return
 
         leaf = flatten_options(top_opts[0].get("options"))
         target_raw = str(leaf.get("player") or leaf.get("clan") or "").strip()
+        filters: dict[str, Any] = {}
+        if "require_fresh" in leaf:
+            filters["requireFresh"] = bool(leaf["require_fresh"])
+        if "require_completed" in leaf:
+            filters["requireCompleted"] = bool(leaf["require_completed"])
+        if "raid" in leaf:
+            raw_raid = leaf.get("raid")
+            if isinstance(raw_raid, int):
+                filters["raid"] = raw_raid
         if not target_raw:
             await patch_discord_followup_best_effort(
                 app_id,
                 token,
                 warn_embed(
-                    "Subscribe Command",
+                    SUBSCRIBE_COMMAND_TITLE,
                     "Provide a target (membership id / player name, or clan id / URL).",
                 ),
             )
@@ -85,7 +102,7 @@ async def run_subscribe_deferred(
                 app_id,
                 token,
                 warn_embed(
-                    "Subscribe Command",
+                    SUBSCRIBE_COMMAND_TITLE,
                     "Run `/subscribe` in a server text channel, not a DM.",
                 ),
             )
@@ -97,7 +114,7 @@ async def run_subscribe_deferred(
                 app_id,
                 token,
                 error_embed(
-                    "Subscribe Failed",
+                    SUBSCRIBE_FAILED_TITLE,
                     subscription_envelope_error_message(status_env),
                 ),
             )
@@ -112,7 +129,7 @@ async def run_subscribe_deferred(
                     app_id,
                     token,
                     error_embed(
-                        "Player Not Found",
+                        PLAYER_NOT_FOUND_TITLE,
                         "Could not resolve that player. Try a Destiny membership id or a clearer"
                         " name (first RaidHub search hit is used).",
                     ),
@@ -124,7 +141,10 @@ async def run_subscribe_deferred(
                 await patch_discord_followup_best_effort(
                     app_id,
                     token,
-                    error_embed("Player Not Found", "Missing membership id for that player."),
+                    error_embed(
+                        PLAYER_NOT_FOUND_TITLE,
+                        "Missing membership id for that player.",
+                    ),
                 )
                 return
             if registered:
@@ -135,6 +155,8 @@ async def run_subscribe_deferred(
                 body: dict[str, Any] = {"targets": {"playerMembershipIds": merged_players}}
             else:
                 body = {"targets": {"playerMembershipIds": [resolved_id]}}
+            if filters:
+                body["filters"] = filters
             display_name = format_player_display_name(prow)
             icon_raw = prow.get("iconPath")
             thumb_url = (
@@ -149,7 +171,7 @@ async def run_subscribe_deferred(
                     app_id,
                     token,
                     error_embed(
-                        "Clan ID Not Recognized",
+                        CLAN_ID_NOT_RECOGNIZED_TITLE,
                         "Could not parse a clan group id from that value. Use digits only, or a"
                         " raidhub.io/clan/... / Bungie clan URL containing the group id.",
                     ),
@@ -164,6 +186,8 @@ async def run_subscribe_deferred(
                 body = {"targets": {"clanGroupIds": merged_clans}}
             else:
                 body = {"targets": {"clanGroupIds": [resolved_id]}}
+            if filters:
+                body["filters"] = filters
 
         ctx = discord_invocation_context(interaction, route_id=SUB_ROUTE_PUT)
         env = await raidhub.request_envelope(
@@ -178,19 +202,20 @@ async def run_subscribe_deferred(
                 app_id,
                 token,
                 error_embed(
-                    "Subscribe Failed",
+                    SUBSCRIBE_FAILED_TITLE,
                     subscription_envelope_error_message(env),
                 ),
             )
             return
 
         if sub == "player":
-            desc = (
-                f"Subscribed to **{display_name}** (`{resolved_id}`) for this channel. "
-                "Use `/subscription status` to see all rules for this channel."
+            desc = subscribe_success_description(
+                display_name,
+                resolved_id,
+                str(interaction.get("channel_id") or ""),
             )
             msg = success_embed(
-                "Subscription Saved",
+                SUBSCRIPTION_SAVED_TITLE,
                 desc,
                 thumbnail_url=thumb_url,
             )
@@ -208,12 +233,13 @@ async def run_subscribe_deferred(
                 if clan_row and isinstance(apath, str)
                 else None
             )
-            desc = (
-                f"Subscribed to **{c_disp}** (`{resolved_id}`) for this channel. "
-                "Use `/subscription status` to see all rules for this channel."
+            desc = subscribe_success_description(
+                c_disp,
+                resolved_id,
+                str(interaction.get("channel_id") or ""),
             )
             msg = success_embed(
-                "Subscription Saved",
+                SUBSCRIPTION_SAVED_TITLE,
                 desc,
                 thumbnail_url=c_thumb,
             )
@@ -226,7 +252,7 @@ async def run_subscribe_deferred(
             err=err,
             discord_application_id=app_id,
             interaction_token=token,
-            user_message_payload=error_embed("Subscribe Failed", USER_FACING_GENERIC),
+            user_message_payload=error_embed(SUBSCRIBE_FAILED_TITLE, USER_FACING_GENERIC),
         )
     finally:
         observe_deferred_completion(command="subscribe", outcome=outcome)
