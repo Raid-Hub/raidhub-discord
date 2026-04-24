@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from src.discord_v10_enums import Permission
 from src.manifest import build_command_manifest, build_commands
 from src.manifest.schema import CommandOptionType
 
@@ -67,6 +68,17 @@ class ManifestCommandsTests(unittest.TestCase):
         self.assertIn("name", first)
         self.assertIn("type", first)
         self.assertIn("description", first)
+
+    def test_subscription_slash_commands_require_manage_webhooks(self) -> None:
+        expected = str(int(Permission.MANAGE_WEBHOOKS))
+        by_name = {c["name"]: c for c in build_command_manifest()}
+        for name in ("subscribe", "subscriptions", "unsubscribe"):
+            self.assertEqual(
+                by_name[name].get("default_member_permissions"),
+                expected,
+                msg=name,
+            )
+        self.assertNotIn("default_member_permissions", by_name["search"])
 
 
 if __name__ == "__main__":

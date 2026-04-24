@@ -41,6 +41,7 @@ from .shared import (
     flatten_options,
     patch_discord_followup_best_effort,
     report_deferred_exception,
+    require_manage_webhooks_or_warn,
     success_embed,
     warn_embed,
 )
@@ -88,6 +89,11 @@ async def run_unsubscribe_deferred(
                     "Run `/unsubscribe all` in a server text channel, not a DM.",
                 ),
             )
+            return
+
+        if not await require_manage_webhooks_or_warn(
+            interaction, app_id=app_id, token=token, title=UNSUBSCRIBE_COMMAND_TITLE
+        ):
             return
 
         ctx = discord_invocation_context(interaction, route_id=SUB_ROUTE_DELETE)
@@ -160,6 +166,11 @@ async def run_unsubscribe_player_deferred(
                     "Run this command in a server text channel, not a DM.",
                 ),
             )
+            return
+
+        if not await require_manage_webhooks_or_warn(
+            interaction, app_id=app_id, token=token, title=UNSUBSCRIBE_PLAYER_TITLE
+        ):
             return
 
         prow = await resolve_player_subscription_row(raidhub, target_raw)
@@ -296,6 +307,11 @@ async def run_unsubscribe_clan_deferred(
                     "Run this command in a server text channel, not a DM.",
                 ),
             )
+            return
+
+        if not await require_manage_webhooks_or_warn(
+            interaction, app_id=app_id, token=token, title=UNSUBSCRIBE_CLAN_TITLE
+        ):
             return
 
         gid = parse_clan_group_id(target_raw)

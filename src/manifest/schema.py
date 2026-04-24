@@ -60,6 +60,8 @@ class CommandDto:
     description: str
     type: CommandType = CommandType.CHAT_INPUT
     dm_permission: bool | None = None
+    # Discord default_member_permissions bitfield as a decimal string (e.g. Manage Webhooks).
+    default_member_permissions: str | None = None
     options: list[CommandOptionDto] | None = None
 
     def to_json(self) -> dict[str, Any]:
@@ -70,6 +72,8 @@ class CommandDto:
         }
         if self.dm_permission is not None:
             data["dm_permission"] = self.dm_permission
+        if self.default_member_permissions is not None:
+            data["default_member_permissions"] = self.default_member_permissions
         if self.options is not None:
             data["options"] = [o.to_json() for o in self.options]
         return data

@@ -40,6 +40,7 @@ from .shared import (
     flatten_options,
     patch_discord_followup_best_effort,
     report_deferred_exception,
+    require_manage_webhooks_or_warn,
     success_embed,
     warn_embed,
 )
@@ -99,6 +100,11 @@ async def run_subscribe_deferred(
                     "Run `/subscribe` in a server text channel, not a DM.",
                 ),
             )
+            return
+
+        if not await require_manage_webhooks_or_warn(
+            interaction, app_id=app_id, token=token, title=SUBSCRIBE_COMMAND_TITLE
+        ):
             return
 
         status_env = await fetch_subscription_status_envelope(raidhub, interaction)

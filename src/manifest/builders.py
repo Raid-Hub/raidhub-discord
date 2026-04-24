@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+from ..discord_v10_enums import Permission
 from .schema import CommandDto, CommandOptionDto, CommandOptionType
+
+# Slash commands that configure RaidHub webhooks for a channel require the same baseline
+# Discord permission as managing native webhooks in that channel.
+_DEFAULT_MANAGE_WEBHOOKS = str(int(Permission.MANAGE_WEBHOOKS))
 
 
 def build_commands(
@@ -23,6 +28,7 @@ def build_commands(
             name="subscribe",
             description="Subscribe this channel to a player or clan (resolves names & URLs here).",
             dm_permission=False,
+            default_member_permissions=_DEFAULT_MANAGE_WEBHOOKS,
             options=[
                 CommandOptionDto(
                     type=CommandOptionType.SUB_COMMAND,
@@ -84,12 +90,14 @@ def build_commands(
             name="subscriptions",
             description="View this channel's RaidHub subscription status and rule health.",
             dm_permission=False,
+            default_member_permissions=_DEFAULT_MANAGE_WEBHOOKS,
             options=[],
         ),
         CommandDto(
             name="unsubscribe",
             description="Turn off all RaidHub alerts for this channel.",
             dm_permission=False,
+            default_member_permissions=_DEFAULT_MANAGE_WEBHOOKS,
             options=[
                 CommandOptionDto(
                     type=CommandOptionType.SUB_COMMAND,

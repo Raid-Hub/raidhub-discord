@@ -58,3 +58,10 @@ class ButtonStyle(IntEnum):
     SUCCESS = 3
     DANGER = 4
     LINK = 5
+
+
+class Permission(IntEnum):
+    """https://discord.com/developers/docs/topics/permissions#permissions-bitwise"""
+
+    ADMINISTRATOR = 1 << 3
+    MANAGE_WEBHOOKS = 1 << 29

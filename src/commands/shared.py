@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 
 from ..config import Settings
+from ..discord_permissions import guild_member_has_manage_webhooks
 from ..log import handlers
 from ..raidhub_client import RaidHubEnvelopeCode
 
@@ -13,6 +14,10 @@ from ..raidhub_client import RaidHubEnvelopeCode
 USER_FACING_GENERIC = "Something went wrong. Try the command again."
 USER_FACING_DISCORD_UPDATE_FAILED = (
     "Could not update this message. Try the command again."
+)
+
+MANAGE_WEBHOOKS_REQUIRED_BODY = (
+    "You need **Manage Webhooks** (or **Administrator**) in this channel to use this command."
 )
 
 
@@ -170,6 +175,22 @@ async def patch_discord_followup_best_effort(
         interaction_token,
         {"content": USER_FACING_DISCORD_UPDATE_FAILED},
     )
+
+
+async def require_manage_webhooks_or_warn(
+    interaction: dict[str, Any],
+    *,
+    app_id: str,
+    token: str,
+    title: str,
+) -> bool:
+    """If the member lacks Manage Webhooks, send warn_embed and return False."""
+    if guild_member_has_manage_webhooks(interaction):
+        return True
+    await patch_discord_followup_best_effort(
+        app_id, token, warn_embed(title, MANAGE_WEBHOOKS_REQUIRED_BODY)
+    )
+    return False
 
 
 async def report_deferred_exception(

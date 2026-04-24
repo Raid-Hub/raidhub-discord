@@ -20,6 +20,7 @@ from .shared import (
     error_embed,
     patch_discord_followup_best_effort,
     report_deferred_exception,
+    require_manage_webhooks_or_warn,
     warn_embed,
 )
 
@@ -55,6 +56,11 @@ async def run_subscription_deferred(
                     "Run this command in a server channel, not a DM.",
                 ),
             )
+            return
+
+        if not await require_manage_webhooks_or_warn(
+            interaction, app_id=app_id, token=token, title=SUBSCRIPTION_COMMAND_TITLE
+        ):
             return
 
         ctx = discord_invocation_context(interaction, route_id=SUB_ROUTE_STATUS)
