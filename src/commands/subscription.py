@@ -7,21 +7,19 @@ from ..prom_metrics import observe_deferred_completion
 from ..raidhub_client import RaidHubClient, discord_invocation_context
 from .subscription_messages import (
     SUBSCRIPTION_COMMAND_TITLE,
-    SUBSCRIPTION_REMOVED_TITLE,
     SUBSCRIPTION_REQUEST_FAILED_TITLE,
 )
 from .subscription_helpers import (
     format_subscription_status_embed,
     subscription_envelope_error_message,
 )
-from .subscription_routes import SUB_ROUTE_DELETE, SUB_ROUTE_STATUS
+from .subscription_routes import SUB_ROUTE_STATUS
 from .shared import (
     USER_FACING_GENERIC,
     application_id,
     error_embed,
     patch_discord_followup_best_effort,
     report_deferred_exception,
-    success_embed,
     warn_embed,
 )
 
@@ -37,26 +35,14 @@ async def run_subscription_deferred(
     try:
         data = interaction.get("data") or {}
         top_opts = data.get("options") or []
-        if not top_opts or not isinstance(top_opts[0], dict):
+        sub = "status"
+        if top_opts and isinstance(top_opts[0], dict):
+            sub = str(top_opts[0].get("name") or "").strip().lower() or "status"
+        if sub != "status":
             await patch_discord_followup_best_effort(
                 app_id,
                 token,
-                warn_embed(
-                    SUBSCRIPTION_COMMAND_TITLE,
-                    "Pick `status` or `delete` under `/subscription`.",
-                ),
-            )
-            return
-
-        sub = str(top_opts[0].get("name") or "").strip().lower()
-        if sub not in ("delete", "status"):
-            await patch_discord_followup_best_effort(
-                app_id,
-                token,
-                warn_embed(
-                    SUBSCRIPTION_COMMAND_TITLE,
-                    "Unknown `/subscription` subcommand.",
-                ),
+                warn_embed(SUBSCRIPTION_COMMAND_TITLE, "Use `/subscription` to view status."),
             )
             return
 
@@ -71,21 +57,12 @@ async def run_subscription_deferred(
             )
             return
 
-        route_id = {"delete": SUB_ROUTE_DELETE, "status": SUB_ROUTE_STATUS}[sub]
-        ctx = discord_invocation_context(interaction, route_id=route_id)
-
-        if sub == "status":
-            env = await raidhub.request_envelope(
-                "GET",
-                "/subscriptions/discord/webhooks",
-                discord_context=ctx,
-            )
-        else:
-            env = await raidhub.request_envelope(
-                "DELETE",
-                "/subscriptions/discord/webhooks",
-                discord_context=ctx,
-            )
+        ctx = discord_invocation_context(interaction, route_id=SUB_ROUTE_STATUS)
+        env = await raidhub.request_envelope(
+            "GET",
+            "/subscriptions/discord/webhooks",
+            discord_context=ctx,
+        )
 
         if not env.get("success"):
             await patch_discord_followup_best_effort(
@@ -99,14 +76,7 @@ async def run_subscription_deferred(
             return
 
         inner = env.get("response") or {}
-        if sub == "status":
-            msg = await format_subscription_status_embed(raidhub, inner)
-        else:
-            msg = success_embed(
-                SUBSCRIPTION_REMOVED_TITLE,
-                "RaidHub will no longer use a webhook in this channel.",
-            )
-
+        msg = await format_subscription_status_embed(raidhub, inner)
         await patch_discord_followup_best_effort(app_id, token, msg)
     except Exception as err:
         outcome = "error"

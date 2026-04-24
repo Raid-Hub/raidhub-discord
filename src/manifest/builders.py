@@ -119,60 +119,40 @@ def build_commands(raid_filter_choices: list[tuple[str, int]] | None = None) -> 
         ),
         CommandDto(
             name="subscription",
-            description="Inspect or remove the RaidHub subscription webhook for this channel.",
+            description="Inspect the RaidHub subscription webhook for this channel.",
             dm_permission=False,
-            options=[
-                CommandOptionDto(
-                    type=CommandOptionType.SUB_COMMAND,
-                    name="status",
-                    description="Show whether this channel is registered and delivery health.",
-                    options=[],
-                ),
-                CommandOptionDto(
-                    type=CommandOptionType.SUB_COMMAND,
-                    name="delete",
-                    description="Remove the webhook destination and rules for this channel.",
-                    options=[],
-                ),
-            ],
+            options=[],
         ),
         CommandDto(
             name="unsubscribe",
-            description="Remove player/clan rules or the webhook destination for this channel.",
+            description="Remove the RaidHub webhook destination and all rules for this channel.",
+            dm_permission=False,
+            options=[],
+        ),
+        CommandDto(
+            name="unsubscribe-player",
+            description="Remove one subscribed Destiny player from this channel.",
             dm_permission=False,
             options=[
                 CommandOptionDto(
-                    type=CommandOptionType.SUB_COMMAND,
-                    name="delete",
-                    description="Remove the webhook destination and all rules for this channel.",
-                    options=[],
-                ),
-                CommandOptionDto(
-                    type=CommandOptionType.SUB_COMMAND,
+                    type=CommandOptionType.STRING,
                     name="player",
-                    description="Remove one subscribed Destiny player from this channel.",
-                    options=[
-                        CommandOptionDto(
-                            type=CommandOptionType.STRING,
-                            name="player",
-                            description="Destiny membership id (digits) or player name",
-                            required=True,
-                        )
-                    ],
-                ),
+                    description="Destiny membership id (digits) or player name",
+                    required=True,
+                )
+            ],
+        ),
+        CommandDto(
+            name="unsubscribe-clan",
+            description="Remove one subscribed Bungie clan from this channel.",
+            dm_permission=False,
+            options=[
                 CommandOptionDto(
-                    type=CommandOptionType.SUB_COMMAND,
+                    type=CommandOptionType.STRING,
                     name="clan",
-                    description="Remove one subscribed Bungie clan from this channel.",
-                    options=[
-                        CommandOptionDto(
-                            type=CommandOptionType.STRING,
-                            name="clan",
-                            description="Numeric group id, raidhub.io/clan/…, or Bungie clan URL",
-                            required=True,
-                        )
-                    ],
-                ),
+                    description="Numeric group id, raidhub.io/clan/…, or Bungie clan URL",
+                    required=True,
+                )
             ],
         ),
     ]

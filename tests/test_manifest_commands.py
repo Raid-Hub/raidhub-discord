@@ -17,6 +17,8 @@ class ManifestCommandsTests(unittest.TestCase):
                 "subscribe",
                 "subscription",
                 "unsubscribe",
+                "unsubscribe-player",
+                "unsubscribe-clan",
             },
         )
 
@@ -51,12 +53,10 @@ class ManifestCommandsTests(unittest.TestCase):
         self.assertEqual(player_raid.type, CommandOptionType.INTEGER)
         self.assertEqual(clan_raid.type, CommandOptionType.INTEGER)
 
-    def test_unsubscribe_has_player_and_clan_subcommands(self) -> None:
+    def test_unsubscribe_is_simple_all_command(self) -> None:
         cmds = {c.name: c for c in build_commands()}
         unsub = cmds["unsubscribe"]
-        self.assertIsNotNone(unsub.options)
-        option_names = {o.name for o in (unsub.options or [])}
-        self.assertEqual(option_names, {"delete", "player", "clan"})
+        self.assertEqual(unsub.options, [])
 
     def test_manifest_json_serializable_shape(self) -> None:
         manifest = build_command_manifest()
