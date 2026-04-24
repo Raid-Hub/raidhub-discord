@@ -247,28 +247,6 @@ def _indexed_clan_rules(cl_raw: list[Any]) -> dict[str, dict[str, Any]]:
     return out
 
 
-def _rule_filter_state(items: list[Any], key: str) -> str:
-    values = [item.get(key) for item in items if isinstance(item, dict) and key in item]
-    bool_values = [bool(v) for v in values if isinstance(v, bool)]
-    if not bool_values:
-        return "unset"
-    uniq = set(bool_values)
-    if len(uniq) > 1:
-        return "mixed"
-    return "yes" if True in uniq else "no"
-
-
-def _rule_filters_summary(pl_raw: list[Any], cl_raw: list[Any]) -> str:
-    all_rules = [*pl_raw, *cl_raw]
-    if not all_rules:
-        return "—"
-    fresh = _rule_filter_state(all_rules, "requireFresh")
-    completed = _rule_filter_state(all_rules, "requireCompleted")
-    return (f"Require Fresh: **{fresh}**\n" f"Require Completed: **{completed}**")[
-        :1024
-    ]
-
-
 async def format_subscription_status_embed(
     raidhub: RaidHubClient | None,
     data: dict[str, Any],
@@ -278,7 +256,8 @@ async def format_subscription_status_embed(
             "Subscription Status",
             "RaidHub alerts are currently turned off for this channel.",
         )
-    active = "**yes**" if data.get("destinationActive") else "**no**"
+    destination_active = bool(data.get("destinationActive"))
+    active = "**yes**" if destination_active else "**no**"
     fails = int(data.get("consecutiveDeliveryFailures") or 0)
     fields: list[dict[str, Any]] = [
         {"name": "Destination Active", "value": active, "inline": True},
@@ -312,13 +291,6 @@ async def format_subscription_status_embed(
     clan_rules = _indexed_clan_rules(cl_raw)
     pc = len(pl_ids)
     cc = len(cl_ids)
-    fields.append(
-        {
-            "name": "Rule Filters",
-            "value": _rule_filters_summary(pl_raw, cl_raw),
-            "inline": False,
-        }
-    )
 
     player_cards: dict[str, dict[str, Any]] = {}
     clan_cards: dict[str, dict[str, Any]] = {}
@@ -383,10 +355,11 @@ async def format_subscription_status_embed(
             "(name and id view)."
         )
 
+    embed_color = 0x57_F287 if destination_active else 0xED42_45
     return base_embed(
         title="Subscription Status",
         description=desc,
-        color=0x5865_F2,
+        color=embed_color,
         fields=fields,
     )
 

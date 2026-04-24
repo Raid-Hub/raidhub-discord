@@ -15,7 +15,7 @@ SUBSCRIPTION_REMOVED_TITLE = "Subscription Removed"
 PLAYER_UNSUBSCRIBED_TITLE = "Player Unsubscribed"
 CLAN_UNSUBSCRIBED_TITLE = "Clan Unsubscribed"
 SUBSCRIPTION_STATUS_RULES_HINT = (
-    "Use `/subscription status` to see all rules for this channel."
+    "Use `/subscriptions` to see all rules for this channel."
 )
 
 

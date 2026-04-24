@@ -12,20 +12,19 @@ class ManifestCommandsTests(unittest.TestCase):
         self.assertEqual(
             names,
             {
-                "instance",
-                "player-search",
+                "search",
                 "subscribe",
-                "subscription",
+                "subscriptions",
                 "unsubscribe",
             },
         )
 
-    def test_instance_command_has_raid_instance_id_option(self) -> None:
+    def test_search_command_has_search_query_option(self) -> None:
         cmds = {c.name: c for c in build_commands()}
-        inst = cmds["instance"]
-        self.assertIsNotNone(inst.options)
-        opt_names = {o.name for o in (inst.options or [])}
-        self.assertIn("raid_instance_id", opt_names)
+        search = cmds["search"]
+        self.assertIsNotNone(search.options)
+        opt_names = {o.name for o in (search.options or [])}
+        self.assertIn("search_query", opt_names)
 
     def test_subscribe_dm_permission_false(self) -> None:
         cmds = {c.name: c for c in build_commands()}
@@ -38,18 +37,20 @@ class ManifestCommandsTests(unittest.TestCase):
         player_opt_names = {o.name for o in (options["player"].options or [])}
         clan_opt_names = {o.name for o in (options["clan"].options or [])}
         self.assertEqual(
-            player_opt_names, {"player", "require_fresh", "require_completed", "raid"}
+            player_opt_names, {"player", "require_fresh", "require_completed"}
         )
         self.assertEqual(
             clan_opt_names,
-            {"clan", "require_fresh", "require_completed", "raid"},
+            {"clan", "require_fresh", "require_completed"},
         )
-        player_raid = next(
-            o for o in (options["player"].options or []) if o.name == "raid"
+        player_rq = next(
+            o for o in (options["player"].options or []) if o.name == "require_fresh"
         )
-        clan_raid = next(o for o in (options["clan"].options or []) if o.name == "raid")
-        self.assertEqual(player_raid.type, CommandOptionType.INTEGER)
-        self.assertEqual(clan_raid.type, CommandOptionType.INTEGER)
+        clan_rq = next(
+            o for o in (options["clan"].options or []) if o.name == "require_fresh"
+        )
+        self.assertEqual(player_rq.type, CommandOptionType.BOOLEAN)
+        self.assertEqual(clan_rq.type, CommandOptionType.BOOLEAN)
 
     def test_unsubscribe_has_all_player_clan_subcommands(self) -> None:
         cmds = {c.name: c for c in build_commands()}

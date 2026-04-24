@@ -91,7 +91,7 @@ def build_commands(raid_filter_choices: list[tuple[str, int]] | None = None) -> 
             ],
         ),
         CommandDto(
-            name="subscription",
+            name="subscriptions",
             description="View this channel's RaidHub subscription status and rule health.",
             dm_permission=False,
             options=[],

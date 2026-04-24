@@ -86,7 +86,21 @@ class FormatSubscriptionStatusEmbedTests(unittest.TestCase):
         fields = {f["name"]: f["value"] for f in out["embeds"][0]["fields"]}
         self.assertIn("Destination Active", fields)
         self.assertIn("Delivery Failures", fields)
-        self.assertEqual(fields["Rule Filters"], "—")
+        self.assertNotIn("Rule Filters", fields)
+        self.assertEqual(out["embeds"][0]["color"], 0x57_F287)
+
+    def test_registered_destination_inactive_embed_is_red(self) -> None:
+        out = asyncio.run(
+            format_subscription_status_embed(
+                None,
+                {
+                    "registered": True,
+                    "destinationActive": False,
+                    "consecutiveDeliveryFailures": 0,
+                },
+            )
+        )
+        self.assertEqual(out["embeds"][0]["color"], 0xED42_45)
 
     def test_registered_uses_clan_group_id_key(self) -> None:
         out = asyncio.run(
@@ -102,10 +116,9 @@ class FormatSubscriptionStatusEmbedTests(unittest.TestCase):
         )
         fields = {f["name"]: f["value"] for f in out["embeds"][0]["fields"]}
         self.assertIn("• `4927161`", fields["Clan Rules (1)"])
-        self.assertIn("`raid:all`", fields["Clan Rules (1)"])
-        self.assertIn("Require Fresh", fields["Rule Filters"])
+        self.assertIn("`raids:all`", fields["Clan Rules (1)"])
 
-    def test_registered_rule_filters_summary(self) -> None:
+    def test_registered_player_rules_show_per_rule_filters(self) -> None:
         out = asyncio.run(
             format_subscription_status_embed(
                 None,
@@ -125,8 +138,7 @@ class FormatSubscriptionStatusEmbedTests(unittest.TestCase):
             )
         )
         fields = {f["name"]: f["value"] for f in out["embeds"][0]["fields"]}
-        self.assertIn("**yes**", fields["Rule Filters"])
-        self.assertIn("**no**", fields["Rule Filters"])
+        self.assertNotIn("Rule Filters", fields)
         self.assertIn("`fresh:yes`", fields["Player Rules (1)"])
         self.assertIn("`completed:no`", fields["Player Rules (1)"])
 
