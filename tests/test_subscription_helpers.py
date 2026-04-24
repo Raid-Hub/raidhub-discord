@@ -154,8 +154,8 @@ class FormatSubscriptionStatusEmbedTests(unittest.TestCase):
         )
         fields = {f["name"]: f["value"] for f in out["embeds"][0]["fields"]}
         self.assertNotIn("Rule Filters", fields)
-        self.assertIn("`fresh:yes`", fields["Player Rules (1)"])
-        self.assertIn("`completed:no`", fields["Player Rules (1)"])
+        self.assertIn("`require:fresh`", fields["Player Rules (1)"])
+        self.assertNotIn("`require:completed`", fields["Player Rules (1)"])
 
 
 class SubscriptionRulesSuffixTests(unittest.TestCase):
