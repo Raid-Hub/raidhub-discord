@@ -25,8 +25,10 @@ from .subscription_messages import (
     unsubscribe_success_description,
 )
 from .subscription_helpers import (
+    clan_put_targets_from_status,
     fetch_subscription_status_envelope,
     format_clan_display_name,
+    player_put_targets_from_status,
     subscription_active_clan_ids,
     subscription_active_player_ids,
     subscription_envelope_error_message,
@@ -215,8 +217,9 @@ async def run_unsubscribe_player_deferred(
             )
             return
 
-        next_players = sorted([p for p in players if p != resolved_id])
-        body: dict[str, Any] = {"targets": {"playerMembershipIds": next_players}}
+        row_list = player_put_targets_from_status(inner)
+        next_rows = [r for r in row_list if r["membershipId"] != resolved_id]
+        body: dict[str, Any] = {"targets": {"players": next_rows}}
 
         ctx = discord_invocation_context(interaction, route_id=SUB_ROUTE_PUT)
         env = await raidhub.request_envelope(
@@ -343,8 +346,9 @@ async def run_unsubscribe_clan_deferred(
             )
             return
 
-        next_clans = sorted([c for c in clans if c != resolved_id])
-        body = {"targets": {"clanGroupIds": next_clans}}
+        row_list = clan_put_targets_from_status(inner)
+        next_rows = [r for r in row_list if r["groupId"] != resolved_id]
+        body = {"targets": {"clans": next_rows}}
 
         ctx = discord_invocation_context(interaction, route_id=SUB_ROUTE_PUT)
         env = await raidhub.request_envelope(

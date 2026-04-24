@@ -73,10 +73,6 @@ async def player_search_render_from_state(
     offset = page * page_size
 
     params: dict[str, Any] = {"query": query, "count": page_size, "offset": offset}
-    if "membershipType" in qp:
-        params["membershipType"] = qp["membershipType"]
-    if "global" in qp:
-        params["global"] = qp["global"]
 
     env = await raidhub.request_envelope("GET", "/player/search", params=params)
     if not env.get("success"):

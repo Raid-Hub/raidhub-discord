@@ -38,14 +38,6 @@ async def run_player_search_deferred(
             return
 
         query_params: dict[str, Any] = {"query": query}
-        if "destiny_membership_type" in opts:
-            query_params["membershipType"] = opts["destiny_membership_type"]
-        elif "membership_type" in opts:
-            query_params["membershipType"] = opts["membership_type"]
-        if "use_global_name_search" in opts:
-            query_params["global"] = opts["use_global_name_search"]
-        elif "global" in opts:
-            query_params["global"] = opts["global"]
 
         page_size = PLAYER_SEARCH_PAGE_SIZE
         session_id = store_paged_session(

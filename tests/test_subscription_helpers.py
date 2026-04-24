@@ -40,14 +40,28 @@ class BuildSubscriptionJsonBodyTests(unittest.TestCase):
                 "clans": "9",
             }
         )
-        self.assertEqual(body["filters"]["requireFresh"], True)
-        self.assertEqual(body["filters"]["requireCompleted"], False)
-        self.assertEqual(body["targets"]["playerMembershipIds"], ["1", "2", "3"])
-        self.assertEqual(body["targets"]["clanGroupIds"], ["9"])
+        self.assertEqual(
+            body["targets"]["players"],
+            [
+                {"membershipId": "1", "requireFresh": True, "requireCompleted": False},
+                {"membershipId": "2", "requireFresh": True, "requireCompleted": False},
+                {"membershipId": "3", "requireFresh": True, "requireCompleted": False},
+            ],
+        )
+        self.assertEqual(
+            body["targets"]["clans"],
+            [{"groupId": "9", "requireFresh": True, "requireCompleted": False}],
+        )
 
     def test_ignores_non_digit_tokens_in_lists(self) -> None:
         body = build_subscription_json_body({"players": "1, abc, 2"})
-        self.assertEqual(body["targets"]["playerMembershipIds"], ["1", "2"])
+        self.assertEqual(
+            body["targets"]["players"],
+            [
+                {"membershipId": "1", "requireFresh": False, "requireCompleted": False},
+                {"membershipId": "2", "requireFresh": False, "requireCompleted": False},
+            ],
+        )
 
 
 class SubscriptionEnvelopeErrorMessageTests(unittest.TestCase):

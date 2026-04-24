@@ -44,6 +44,172 @@ def subscription_active_clan_ids(inner: dict[str, Any]) -> list[str]:
     return sorted(set(out))
 
 
+def _raid_ids_list_from_rule(item: dict[str, Any]) -> list[int]:
+    raw = item.get("raidIds")
+    if not isinstance(raw, list):
+        return []
+    out: list[int] = []
+    for v in raw:
+        s = str(v).strip()
+        if s.isdigit():
+            out.append(int(s))
+    return out
+
+
+def player_put_targets_from_status(inner: dict[str, Any]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in inner.get("players") or []:
+        if not isinstance(item, dict):
+            continue
+        raw = item.get("membershipId")
+        if raw is None:
+            continue
+        s = str(raw).strip()
+        if not s.isdigit():
+            continue
+        mid = str(int(s))
+        entry: dict[str, Any] = {
+            "membershipId": mid,
+            "requireFresh": bool(item.get("requireFresh")),
+            "requireCompleted": bool(item.get("requireCompleted")),
+        }
+        rids = _raid_ids_list_from_rule(item)
+        if rids:
+            entry["raids"] = rids
+        out.append(entry)
+    out.sort(key=lambda r: r["membershipId"])
+    return out
+
+
+def clan_put_targets_from_status(inner: dict[str, Any]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in inner.get("clans") or []:
+        if not isinstance(item, dict):
+            continue
+        raw = item.get("groupId") or item.get("clanGroupId")
+        if raw is None:
+            continue
+        s = str(raw).strip()
+        if not s.isdigit():
+            continue
+        gid = str(int(s))
+        entry: dict[str, Any] = {
+            "groupId": gid,
+            "requireFresh": bool(item.get("requireFresh")),
+            "requireCompleted": bool(item.get("requireCompleted")),
+        }
+        rids = _raid_ids_list_from_rule(item)
+        if rids:
+            entry["raids"] = rids
+        out.append(entry)
+    out.sort(key=lambda r: r["groupId"])
+    return out
+
+
+def player_target_from_subscribe_leaf(membership_id: str, leaf: dict[str, Any]) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "membershipId": membership_id,
+        "requireFresh": False,
+        "requireCompleted": False,
+    }
+    if "require_fresh" in leaf:
+        base["requireFresh"] = bool(leaf["require_fresh"])
+    if "require_completed" in leaf:
+        base["requireCompleted"] = bool(leaf["require_completed"])
+    return base
+
+
+def merge_player_subscribe_put_body(
+    status_inner: dict[str, Any], resolved_id: str, leaf: dict[str, Any]
+) -> dict[str, Any]:
+    rows = [r for r in player_put_targets_from_status(status_inner) if r["membershipId"] != resolved_id]
+    prior: dict[str, Any] | None = None
+    for item in status_inner.get("players") or []:
+        if not isinstance(item, dict):
+            continue
+        raw = item.get("membershipId")
+        if raw is None:
+            continue
+        s = str(raw).strip()
+        if not s.isdigit():
+            continue
+        if str(int(s)) != resolved_id:
+            continue
+        prior = {
+            "membershipId": resolved_id,
+            "requireFresh": bool(item.get("requireFresh")),
+            "requireCompleted": bool(item.get("requireCompleted")),
+        }
+        rids = _raid_ids_list_from_rule(item)
+        if rids:
+            prior["raids"] = rids
+        break
+    base = prior or {
+        "membershipId": resolved_id,
+        "requireFresh": False,
+        "requireCompleted": False,
+    }
+    if "require_fresh" in leaf:
+        base["requireFresh"] = bool(leaf["require_fresh"])
+    if "require_completed" in leaf:
+        base["requireCompleted"] = bool(leaf["require_completed"])
+    rows.append(base)
+    rows.sort(key=lambda r: r["membershipId"])
+    return {"targets": {"players": rows}}
+
+
+def clan_target_from_subscribe_leaf(group_id: str, leaf: dict[str, Any]) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "groupId": group_id,
+        "requireFresh": False,
+        "requireCompleted": False,
+    }
+    if "require_fresh" in leaf:
+        base["requireFresh"] = bool(leaf["require_fresh"])
+    if "require_completed" in leaf:
+        base["requireCompleted"] = bool(leaf["require_completed"])
+    return base
+
+
+def merge_clan_subscribe_put_body(
+    status_inner: dict[str, Any], resolved_id: str, leaf: dict[str, Any]
+) -> dict[str, Any]:
+    rows = [r for r in clan_put_targets_from_status(status_inner) if r["groupId"] != resolved_id]
+    prior: dict[str, Any] | None = None
+    for item in status_inner.get("clans") or []:
+        if not isinstance(item, dict):
+            continue
+        raw = item.get("groupId") or item.get("clanGroupId")
+        if raw is None:
+            continue
+        s = str(raw).strip()
+        if not s.isdigit():
+            continue
+        if str(int(s)) != resolved_id:
+            continue
+        prior = {
+            "groupId": resolved_id,
+            "requireFresh": bool(item.get("requireFresh")),
+            "requireCompleted": bool(item.get("requireCompleted")),
+        }
+        rids = _raid_ids_list_from_rule(item)
+        if rids:
+            prior["raids"] = rids
+        break
+    base = prior or {
+        "groupId": resolved_id,
+        "requireFresh": False,
+        "requireCompleted": False,
+    }
+    if "require_fresh" in leaf:
+        base["requireFresh"] = bool(leaf["require_fresh"])
+    if "require_completed" in leaf:
+        base["requireCompleted"] = bool(leaf["require_completed"])
+    rows.append(base)
+    rows.sort(key=lambda r: r["groupId"])
+    return {"targets": {"clans": rows}}
+
+
 async def fetch_subscription_status_envelope(
     raidhub: RaidHubClient,
     interaction: dict[str, Any],
@@ -63,20 +229,19 @@ def build_subscription_json_body(leaf_opts: dict[str, Any]) -> dict[str, Any]:
     ).strip()
     if wn:
         body["name"] = wn[:80]
-    filters: dict[str, Any] = {}
-    if "require_fresh" in leaf_opts:
-        filters["requireFresh"] = bool(leaf_opts["require_fresh"])
-    if "require_completed" in leaf_opts:
-        filters["requireCompleted"] = bool(leaf_opts["require_completed"])
-    if filters:
-        body["filters"] = filters
+    rf = bool(leaf_opts["require_fresh"]) if "require_fresh" in leaf_opts else False
+    rc = bool(leaf_opts["require_completed"]) if "require_completed" in leaf_opts else False
     targets: dict[str, Any] = {}
     players = _comma_separated_digit_ids(str(leaf_opts.get("players") or ""))
     if players:
-        targets["playerMembershipIds"] = players
+        targets["players"] = [
+            {"membershipId": p, "requireFresh": rf, "requireCompleted": rc} for p in players
+        ]
     clans = _comma_separated_digit_ids(str(leaf_opts.get("clans") or ""))
     if clans:
-        targets["clanGroupIds"] = clans
+        targets["clans"] = [
+            {"groupId": c, "requireFresh": rf, "requireCompleted": rc} for c in clans
+        ]
     if targets:
         body["targets"] = targets
     return body
@@ -373,8 +538,8 @@ def subscription_envelope_error_message(env: dict[str, Any]) -> str:
         )
     if code == "BodyValidationError":
         return (
-            "RaidHub could not validate the payload. Use digits only for **players** / **clans** "
-            "lists (comma-separated)."
+            "RaidHub could not validate the payload. Check **targets.players** / **targets.clans** "
+            "(numeric membership id / group id and optional rule fields)."
         )
     return discord_message_for_failed_envelope(code, "")
 
