@@ -325,8 +325,6 @@ async def _fetch_clan_basic_card(
 
 
 def _standardized_rule_string(rule: dict[str, Any]) -> str:
-    fresh = "yes" if bool(rule.get("requireFresh")) else "no"
-    completed = "yes" if bool(rule.get("requireCompleted")) else "no"
     raid_ids_raw = rule.get("raidIds")
     raid_ids: list[str] = []
     if isinstance(raid_ids_raw, list):
@@ -347,7 +345,13 @@ def _standardized_rule_string(rule: dict[str, Any]) -> str:
         raid = f"raids:{','.join(raid_ids)}"
     else:
         raid = "raids:all"
-    return f"`fresh:{fresh}` `completed:{completed}` `{raid}`"
+    filters: list[str] = []
+    if bool(rule.get("requireFresh")):
+        filters.append("`require:fresh`")
+    if bool(rule.get("requireCompleted")):
+        filters.append("`require:completed`")
+    filters.append(f"`{raid}`")
+    return " ".join(filters)
 
 
 def _player_rule_line(
