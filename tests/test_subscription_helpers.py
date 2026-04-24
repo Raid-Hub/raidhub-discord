@@ -69,7 +69,8 @@ class FormatSubscriptionStatusEmbedTests(unittest.TestCase):
         out = asyncio.run(format_subscription_status_embed(None, {"registered": False}))
         self.assertIn("embeds", out)
         self.assertEqual(out["embeds"][0]["title"], "Subscription Status")
-        self.assertIn("No RaidHub subscription webhook", out["embeds"][0]["description"])
+        self.assertIn("RaidHub alerts are currently turned off", out["embeds"][0]["description"])
+        self.assertEqual(out["embeds"][0]["color"], 0x747F8D)
 
     def test_registered_minimal(self) -> None:
         out = asyncio.run(

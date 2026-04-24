@@ -10,7 +10,6 @@ from .subscription_routes import SUB_ROUTE_STATUS
 from .shared import (
     base_embed,
     discord_message_for_failed_envelope,
-    info_embed,
     iso_to_discord_relative,
 )
 
@@ -252,9 +251,10 @@ async def format_subscription_status_embed(
     data: dict[str, Any],
 ) -> dict[str, Any]:
     if not data.get("registered"):
-        return info_embed(
-            "Subscription Status",
-            "RaidHub alerts are currently turned off for this channel.",
+        return base_embed(
+            title="Subscription Status",
+            description="RaidHub alerts are currently turned off for this channel.",
+            color=0x747F8D,
         )
     destination_active = bool(data.get("destinationActive"))
     active = "**yes**" if destination_active else "**no**"
