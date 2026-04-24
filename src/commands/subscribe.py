@@ -184,7 +184,6 @@ async def run_subscribe_deferred(
             )
             return
 
-        inner_put = env.get("response") or {}
         if sub == "player":
             desc = (
                 f"Subscribed to **{display_name}** (`{resolved_id}`) for this channel. "
