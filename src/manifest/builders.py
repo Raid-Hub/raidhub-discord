@@ -3,7 +3,9 @@ from __future__ import annotations
 from .schema import CommandDto, CommandOptionDto, CommandOptionType
 
 
-def build_commands(raid_filter_choices: list[tuple[str, int]] | None = None) -> list[CommandDto]:
+def build_commands(
+    raid_filter_choices: list[tuple[str, int]] | None = None,
+) -> list[CommandDto]:
     return [
         CommandDto(
             name="search",
@@ -14,18 +16,6 @@ def build_commands(raid_filter_choices: list[tuple[str, int]] | None = None) -> 
                     name="search_query",
                     description="Search text",
                     required=True,
-                ),
-                CommandOptionDto(
-                    type=CommandOptionType.INTEGER,
-                    name="destiny_membership_type",
-                    description="Destiny membership type",
-                    required=False,
-                ),
-                CommandOptionDto(
-                    type=CommandOptionType.BOOLEAN,
-                    name="use_global_name_search",
-                    description="Search by Bungie name",
-                    required=False,
                 ),
             ],
         ),
@@ -91,7 +81,7 @@ def build_commands(raid_filter_choices: list[tuple[str, int]] | None = None) -> 
             ],
         ),
         CommandDto(
-            name="subscription",
+            name="subscriptions",
             description="View this channel's RaidHub subscription status and rule health.",
             dm_permission=False,
             options=[],
@@ -132,7 +122,7 @@ def build_commands(raid_filter_choices: list[tuple[str, int]] | None = None) -> 
                             required=True,
                         )
                     ],
-                )
+                ),
             ],
         ),
     ]

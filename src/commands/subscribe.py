@@ -24,10 +24,12 @@ from .subscription_messages import (
     subscribe_success_description,
 )
 from .subscription_helpers import (
+    clan_target_from_subscribe_leaf,
     fetch_subscription_status_envelope,
     format_clan_display_name,
-    subscription_active_clan_ids,
-    subscription_active_player_ids,
+    merge_clan_subscribe_put_body,
+    merge_player_subscribe_put_body,
+    player_target_from_subscribe_leaf,
     subscription_envelope_error_message,
 )
 from .subscription_routes import SUB_ROUTE_PUT
@@ -76,11 +78,6 @@ async def run_subscribe_deferred(
 
         leaf = flatten_options(top_opts[0].get("options"))
         target_raw = str(leaf.get("player") or leaf.get("clan") or "").strip()
-        filters: dict[str, Any] = {}
-        if "require_fresh" in leaf:
-            filters["requireFresh"] = bool(leaf["require_fresh"])
-        if "require_completed" in leaf:
-            filters["requireCompleted"] = bool(leaf["require_completed"])
         # TODO: Add raid filter input once we have a solid multi-select UX.
         if not target_raw:
             await patch_discord_followup_best_effort(
@@ -147,15 +144,13 @@ async def run_subscribe_deferred(
                 )
                 return
             if registered:
-                merged_players = subscription_active_player_ids(status_inner)
-                if resolved_id not in merged_players:
-                    merged_players.append(resolved_id)
-                merged_players.sort()
-                body: dict[str, Any] = {"targets": {"playerMembershipIds": merged_players}}
+                body = merge_player_subscribe_put_body(status_inner, resolved_id, leaf)
             else:
-                body = {"targets": {"playerMembershipIds": [resolved_id]}}
-            if filters:
-                body["filters"] = filters
+                body = {
+                    "targets": {
+                        "players": [player_target_from_subscribe_leaf(resolved_id, leaf)]
+                    }
+                }
             display_name = format_player_display_name(prow)
             icon_raw = prow.get("iconPath")
             thumb_url = (
@@ -178,15 +173,11 @@ async def run_subscribe_deferred(
                 return
             resolved_id = str(int(gid))
             if registered:
-                merged_clans = subscription_active_clan_ids(status_inner)
-                if resolved_id not in merged_clans:
-                    merged_clans.append(resolved_id)
-                merged_clans.sort()
-                body = {"targets": {"clanGroupIds": merged_clans}}
+                body = merge_clan_subscribe_put_body(status_inner, resolved_id, leaf)
             else:
-                body = {"targets": {"clanGroupIds": [resolved_id]}}
-            if filters:
-                body["filters"] = filters
+                body = {
+                    "targets": {"clans": [clan_target_from_subscribe_leaf(resolved_id, leaf)]}
+                }
 
         ctx = discord_invocation_context(interaction, route_id=SUB_ROUTE_PUT)
         env = await raidhub.request_envelope(

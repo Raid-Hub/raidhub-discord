@@ -38,14 +38,6 @@ async def run_player_search_deferred(
             return
 
         query_params: dict[str, Any] = {"query": query}
-        if "destiny_membership_type" in opts:
-            query_params["membershipType"] = opts["destiny_membership_type"]
-        elif "membership_type" in opts:
-            query_params["membershipType"] = opts["membership_type"]
-        if "use_global_name_search" in opts:
-            query_params["global"] = opts["use_global_name_search"]
-        elif "global" in opts:
-            query_params["global"] = opts["global"]
 
         page_size = PLAYER_SEARCH_PAGE_SIZE
         session_id = store_paged_session(
@@ -61,7 +53,7 @@ async def run_player_search_deferred(
     except Exception as err:
         outcome = "error"
         await report_deferred_exception(
-            command="player-search",
+            command="search",
             log_key="PLAYER_SEARCH_DEFERRED_FAILED",
             err=err,
             discord_application_id=app_id,
@@ -69,7 +61,7 @@ async def run_player_search_deferred(
             user_message_payload={"content": USER_FACING_GENERIC},
         )
     finally:
-        observe_deferred_completion(command="player-search", outcome=outcome)
+        observe_deferred_completion(command="search", outcome=outcome)
 
 
 __all__ = ["register_player_search_pager", "run_player_search_deferred"]

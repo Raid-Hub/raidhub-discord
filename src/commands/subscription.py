@@ -42,7 +42,7 @@ async def run_subscription_deferred(
             await patch_discord_followup_best_effort(
                 app_id,
                 token,
-                warn_embed(SUBSCRIPTION_COMMAND_TITLE, "Use `/subscription` to view status."),
+                warn_embed(SUBSCRIPTION_COMMAND_TITLE, "Use `/subscriptions` to view status."),
             )
             return
 
@@ -81,7 +81,7 @@ async def run_subscription_deferred(
     except Exception as err:
         outcome = "error"
         await report_deferred_exception(
-            command="subscription",
+            command="subscriptions",
             log_key="SUBSCRIPTION_DEFERRED_FAILED",
             err=err,
             discord_application_id=app_id,
@@ -89,7 +89,7 @@ async def run_subscription_deferred(
             user_message_payload=error_embed("Subscription Failed", USER_FACING_GENERIC),
         )
     finally:
-        observe_deferred_completion(command="subscription", outcome=outcome)
+        observe_deferred_completion(command="subscriptions", outcome=outcome)
 
 
 __all__ = ["run_subscription_deferred"]

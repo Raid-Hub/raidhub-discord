@@ -40,14 +40,28 @@ class BuildSubscriptionJsonBodyTests(unittest.TestCase):
                 "clans": "9",
             }
         )
-        self.assertEqual(body["filters"]["requireFresh"], True)
-        self.assertEqual(body["filters"]["requireCompleted"], False)
-        self.assertEqual(body["targets"]["playerMembershipIds"], ["1", "2", "3"])
-        self.assertEqual(body["targets"]["clanGroupIds"], ["9"])
+        self.assertEqual(
+            body["targets"]["players"],
+            [
+                {"membershipId": "1", "requireFresh": True, "requireCompleted": False},
+                {"membershipId": "2", "requireFresh": True, "requireCompleted": False},
+                {"membershipId": "3", "requireFresh": True, "requireCompleted": False},
+            ],
+        )
+        self.assertEqual(
+            body["targets"]["clans"],
+            [{"groupId": "9", "requireFresh": True, "requireCompleted": False}],
+        )
 
     def test_ignores_non_digit_tokens_in_lists(self) -> None:
         body = build_subscription_json_body({"players": "1, abc, 2"})
-        self.assertEqual(body["targets"]["playerMembershipIds"], ["1", "2"])
+        self.assertEqual(
+            body["targets"]["players"],
+            [
+                {"membershipId": "1", "requireFresh": False, "requireCompleted": False},
+                {"membershipId": "2", "requireFresh": False, "requireCompleted": False},
+            ],
+        )
 
 
 class SubscriptionEnvelopeErrorMessageTests(unittest.TestCase):
@@ -69,7 +83,8 @@ class FormatSubscriptionStatusEmbedTests(unittest.TestCase):
         out = asyncio.run(format_subscription_status_embed(None, {"registered": False}))
         self.assertIn("embeds", out)
         self.assertEqual(out["embeds"][0]["title"], "Subscription Status")
-        self.assertIn("No RaidHub subscription webhook", out["embeds"][0]["description"])
+        self.assertIn("RaidHub alerts are currently turned off", out["embeds"][0]["description"])
+        self.assertEqual(out["embeds"][0]["color"], 0x747F8D)
 
     def test_registered_minimal(self) -> None:
         out = asyncio.run(
@@ -86,7 +101,21 @@ class FormatSubscriptionStatusEmbedTests(unittest.TestCase):
         fields = {f["name"]: f["value"] for f in out["embeds"][0]["fields"]}
         self.assertIn("Destination Active", fields)
         self.assertIn("Delivery Failures", fields)
-        self.assertEqual(fields["Rule Filters"], "—")
+        self.assertNotIn("Rule Filters", fields)
+        self.assertEqual(out["embeds"][0]["color"], 0x57_F287)
+
+    def test_registered_destination_inactive_embed_is_red(self) -> None:
+        out = asyncio.run(
+            format_subscription_status_embed(
+                None,
+                {
+                    "registered": True,
+                    "destinationActive": False,
+                    "consecutiveDeliveryFailures": 0,
+                },
+            )
+        )
+        self.assertEqual(out["embeds"][0]["color"], 0xED42_45)
 
     def test_registered_uses_clan_group_id_key(self) -> None:
         out = asyncio.run(
@@ -102,10 +131,9 @@ class FormatSubscriptionStatusEmbedTests(unittest.TestCase):
         )
         fields = {f["name"]: f["value"] for f in out["embeds"][0]["fields"]}
         self.assertIn("• `4927161`", fields["Clan Rules (1)"])
-        self.assertIn("`raid:all`", fields["Clan Rules (1)"])
-        self.assertIn("Require Fresh", fields["Rule Filters"])
+        self.assertIn("`raids:all`", fields["Clan Rules (1)"])
 
-    def test_registered_rule_filters_summary(self) -> None:
+    def test_registered_player_rules_show_per_rule_filters(self) -> None:
         out = asyncio.run(
             format_subscription_status_embed(
                 None,
@@ -125,8 +153,7 @@ class FormatSubscriptionStatusEmbedTests(unittest.TestCase):
             )
         )
         fields = {f["name"]: f["value"] for f in out["embeds"][0]["fields"]}
-        self.assertIn("**yes**", fields["Rule Filters"])
-        self.assertIn("**no**", fields["Rule Filters"])
+        self.assertNotIn("Rule Filters", fields)
         self.assertIn("`fresh:yes`", fields["Player Rules (1)"])
         self.assertIn("`completed:no`", fields["Player Rules (1)"])
 

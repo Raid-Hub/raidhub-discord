@@ -12,7 +12,6 @@ from starlette.responses import Response
 
 from .commands import (
     register_player_search_pager,
-    run_instance_deferred,
     run_player_search_deferred,
     run_subscribe_deferred,
     run_subscription_deferred,
@@ -41,10 +40,9 @@ def create_app() -> FastAPI:
     register_player_search_pager(raidhub)
 
     command_handlers: dict[str, CommandHandler] = {
-        "instance": run_instance_deferred,
-        "player-search": run_player_search_deferred,
+        "search": run_player_search_deferred,
         "subscribe": run_subscribe_deferred,
-        "subscription": run_subscription_deferred,
+        "subscriptions": run_subscription_deferred,
         "unsubscribe": run_unsubscribe_deferred,
     }
 
