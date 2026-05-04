@@ -13,7 +13,7 @@ from .subscription_helpers import (
     format_subscription_status_embed,
     subscription_envelope_error_message,
 )
-from .subscription_routes import SUB_ROUTE_STATUS
+from .subscription_routes import SUB_ROUTE_STATUS, SUBSCRIPTION_WEBHOOKS_PATH
 from .shared import (
     USER_FACING_GENERIC,
     application_id,
@@ -66,7 +66,7 @@ async def run_subscription_deferred(
         ctx = discord_invocation_context(interaction, route_id=SUB_ROUTE_STATUS)
         env = await raidhub.request_envelope(
             "GET",
-            "/subscriptions/discord/webhooks",
+            SUBSCRIPTION_WEBHOOKS_PATH,
             discord_context=ctx,
         )
 

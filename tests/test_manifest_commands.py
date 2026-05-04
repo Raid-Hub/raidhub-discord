@@ -13,6 +13,8 @@ class ManifestCommandsTests(unittest.TestCase):
         self.assertEqual(
             names,
             {
+                "link",
+                "register",
                 "search",
                 "subscribe",
                 "subscriptions",
@@ -30,6 +32,11 @@ class ManifestCommandsTests(unittest.TestCase):
     def test_subscribe_dm_permission_false(self) -> None:
         cmds = {c.name: c for c in build_commands()}
         self.assertIs(cmds["subscribe"].dm_permission, False)
+
+    def test_link_and_register_allow_dm(self) -> None:
+        cmds = {c.name: c for c in build_commands()}
+        self.assertIs(cmds["link"].dm_permission, True)
+        self.assertIs(cmds["register"].dm_permission, True)
 
     def test_subscribe_subcommands_expose_rule_filter_options(self) -> None:
         cmds = {c.name: c for c in build_commands()}
@@ -79,6 +86,8 @@ class ManifestCommandsTests(unittest.TestCase):
                 msg=name,
             )
         self.assertNotIn("default_member_permissions", by_name["search"])
+        self.assertNotIn("default_member_permissions", by_name["link"])
+        self.assertNotIn("default_member_permissions", by_name["register"])
 
 
 if __name__ == "__main__":

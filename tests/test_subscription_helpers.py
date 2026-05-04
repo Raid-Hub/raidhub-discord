@@ -14,9 +14,9 @@ from src.commands.subscription_routes import SUB_ROUTE_DELETE, SUB_ROUTE_PUT, SU
 
 class SubscriptionRoutesTests(unittest.TestCase):
     def test_route_ids_match_expected_api_shape(self) -> None:
-        self.assertIn("subscriptions/discord/webhooks", SUB_ROUTE_PUT)
-        self.assertIn("subscriptions/discord/webhooks", SUB_ROUTE_DELETE)
-        self.assertIn("subscriptions/discord/webhooks", SUB_ROUTE_STATUS)
+        self.assertIn("internal/subscriptions/discord/webhooks", SUB_ROUTE_PUT)
+        self.assertIn("internal/subscriptions/discord/webhooks", SUB_ROUTE_DELETE)
+        self.assertIn("internal/subscriptions/discord/webhooks", SUB_ROUTE_STATUS)
 
 
 class BuildSubscriptionJsonBodyTests(unittest.TestCase):

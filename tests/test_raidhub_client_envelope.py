@@ -47,7 +47,7 @@ class NormalizeEnvelopeResponseTests(unittest.TestCase):
         out = normalize_envelope_response(
             base_url="http://api",
             method="GET",
-            path="/subscriptions/discord/webhooks",
+            path="/internal/subscriptions/discord/webhooks",
             status=404,
             response_text="Cannot GET",
             data=None,

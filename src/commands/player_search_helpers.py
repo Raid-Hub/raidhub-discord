@@ -74,7 +74,10 @@ async def player_search_render_from_state(
 
     params: dict[str, Any] = {"query": query, "count": page_size, "offset": offset}
 
-    env = await raidhub.request_envelope("GET", "/player/search", params=params)
+    user_bearer = state.get("user_bearer")
+    ub = user_bearer if isinstance(user_bearer, str) and user_bearer.strip() else None
+
+    env = await raidhub.request_envelope("GET", "/player/search", params=params, user_bearer=ub)
     if not env.get("success"):
         code = str(env.get("code", "Error"))
         return {

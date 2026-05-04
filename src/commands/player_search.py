@@ -6,6 +6,7 @@ from ..config import Settings
 from ..pagination import store_paged_session
 from ..prom_metrics import observe_deferred_completion
 from ..raidhub_client import RaidHubClient
+from ..raidhub_user_jwt import resolve_user_bearer_token
 from .player_search_helpers import (
     PLAYER_SEARCH_PAGE_SIZE,
     player_search_render_from_state,
@@ -40,12 +41,21 @@ async def run_player_search_deferred(
         query_params: dict[str, Any] = {"query": query}
 
         page_size = PLAYER_SEARCH_PAGE_SIZE
+        user_bearer = await resolve_user_bearer_token(interaction, settings)
         session_id = store_paged_session(
-            {"query_params": query_params, "page_size": page_size}
+            {
+                "query_params": query_params,
+                "page_size": page_size,
+                "user_bearer": user_bearer,
+            }
         )
         payload = await player_search_render_from_state(
             raidhub,
-            {"query_params": query_params, "page_size": page_size},
+            {
+                "query_params": query_params,
+                "page_size": page_size,
+                "user_bearer": user_bearer,
+            },
             session_id,
             "0",
         )
