@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Awaitable, cast
 
 import redis.asyncio as aioredis
 from libsql_client import create_client_sync
@@ -54,7 +54,8 @@ async def init_linked_account_redis(settings: Settings) -> None:
                 decode_responses=True,
                 socket_connect_timeout=5.0,
             )
-        await client.ping()
+        # redis stubs union bool | Awaitable[bool] for ping(); runtime is always awaitable for asyncio client.
+        await cast(Awaitable[bool], client.ping())
         _redis = client
         ingress.info("REDIS_LINKED_ACCOUNT_CACHE_READY", {})
     except Exception as err:
