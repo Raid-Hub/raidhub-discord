@@ -13,6 +13,18 @@ def build_commands(
 ) -> list[CommandDto]:
     return [
         CommandDto(
+            name="link",
+            description="Open RaidHub to link your Bungie account with Discord and linked roles.",
+            dm_permission=True,
+            options=[],
+        ),
+        CommandDto(
+            name="register",
+            description="Same as /link — open RaidHub to connect Discord for linked roles.",
+            dm_permission=True,
+            options=[],
+        ),
+        CommandDto(
             name="search",
             description="Search RaidHub players by Bungie name or platform name.",
             options=[

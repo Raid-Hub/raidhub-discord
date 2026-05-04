@@ -33,7 +33,7 @@ from .subscription_helpers import (
     subscription_active_player_ids,
     subscription_envelope_error_message,
 )
-from .subscription_routes import SUB_ROUTE_DELETE, SUB_ROUTE_PUT
+from .subscription_routes import SUB_ROUTE_DELETE, SUB_ROUTE_PUT, SUBSCRIPTION_WEBHOOKS_PATH
 from .shared import (
     USER_FACING_GENERIC,
     application_id,
@@ -99,7 +99,7 @@ async def run_unsubscribe_deferred(
         ctx = discord_invocation_context(interaction, route_id=SUB_ROUTE_DELETE)
         env = await raidhub.request_envelope(
             "DELETE",
-            "/subscriptions/discord/webhooks",
+            SUBSCRIPTION_WEBHOOKS_PATH,
             discord_context=ctx,
         )
         if not env.get("success"):
@@ -235,7 +235,7 @@ async def run_unsubscribe_player_deferred(
         ctx = discord_invocation_context(interaction, route_id=SUB_ROUTE_PUT)
         env = await raidhub.request_envelope(
             "PUT",
-            "/subscriptions/discord/webhooks",
+            SUBSCRIPTION_WEBHOOKS_PATH,
             json=body,
             discord_context=ctx,
         )
@@ -369,7 +369,7 @@ async def run_unsubscribe_clan_deferred(
         ctx = discord_invocation_context(interaction, route_id=SUB_ROUTE_PUT)
         env = await raidhub.request_envelope(
             "PUT",
-            "/subscriptions/discord/webhooks",
+            SUBSCRIPTION_WEBHOOKS_PATH,
             json=body,
             discord_context=ctx,
         )

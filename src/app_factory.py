@@ -19,6 +19,11 @@ from .commands import (
 )
 from .config import Settings, get_settings
 from .discord_auth import verify_discord_signature_with_reason
+from .linked_account_context import (
+    attach_raidhub_linked_account_context,
+    close_linked_account_redis,
+    init_linked_account_redis,
+)
 from .log import ingress
 from .pagination import try_handle_pager_component
 from .prom_metrics import metrics_response, observe_interaction
@@ -63,7 +68,11 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         _validate_startup_settings()
-        yield
+        await init_linked_account_redis(settings)
+        try:
+            yield
+        finally:
+            await close_linked_account_redis()
 
     app = FastAPI(title="raidhub-discord", lifespan=lifespan)
 
@@ -171,8 +180,19 @@ def create_app() -> FastAPI:
 
         name = interaction.get("data", {}).get("name")
         ingress.info("DISCORD_COMMAND_RECEIVED", {"command_name": name})
+        if name in ("link", "register"):
+            from .commands.link import link_interaction_response
+
+            observe_interaction(
+                handler="link_or_register_immediate",
+                status="ok",
+                started_monotonic=t0,
+            )
+            return JSONResponse(link_interaction_response(settings))
+
         handler = command_handlers.get(name)
         if handler:
+            await attach_raidhub_linked_account_context(interaction, settings)
             background_tasks.add_task(handler, interaction, raidhub, settings)
             handler_label = str(name).replace("-", "_")
             observe_interaction(

@@ -18,7 +18,18 @@ class Settings:
     discord_sync_dry_run: bool
     raidhub_api_base_url: str
     raidhub_api_key: str
+    raidhub_client_secret: str
+    raidhub_website_base_url: str
+    raidhub_user_jwt_cache_ttl_seconds: int
     raidhub_jwt_secret: str
+    raidhub_account_turso_url: str
+    raidhub_account_lookup_cache_ttl_seconds: int
+    raidhub_discord_linked_account_cache_ns: str
+    redis_url: str
+    redis_host: str
+    redis_port: int
+    redis_password: str
+    redis_db: int
     sentry_dsn: str
     sentry_environment: str
     sentry_release: str
@@ -39,7 +50,26 @@ def get_settings() -> Settings:
             "RAIDHUB_API_BASE_URL", "http://localhost:8000"
         ).strip(),
         raidhub_api_key=os.getenv("RAIDHUB_API_KEY", "").strip(),
+        raidhub_client_secret=os.getenv("RAIDHUB_CLIENT_SECRET", "").strip(),
+        raidhub_website_base_url=os.getenv(
+            "RAIDHUB_WEBSITE_BASE_URL", "https://raidhub.io"
+        ).strip(),
+        raidhub_user_jwt_cache_ttl_seconds=int(
+            os.getenv("RAIDHUB_USER_JWT_CACHE_TTL_SECONDS", "3600").strip() or "3600"
+        ),
         raidhub_jwt_secret=os.getenv("RAIDHUB_JWT_SECRET", "").strip(),
+        raidhub_account_turso_url=os.getenv("RAIDHUB_ACCOUNT_TURSO_URL", "").strip(),
+        raidhub_account_lookup_cache_ttl_seconds=int(
+            os.getenv("RAIDHUB_ACCOUNT_LOOKUP_CACHE_TTL_SECONDS", "90").strip() or "90"
+        ),
+        raidhub_discord_linked_account_cache_ns=os.getenv(
+            "RAIDHUB_DISCORD_LINKED_ACCOUNT_CACHE_NS", "1"
+        ).strip(),
+        redis_url=os.getenv("REDIS_URL", "").strip(),
+        redis_host=os.getenv("REDIS_HOST", "").strip(),
+        redis_port=int(os.getenv("REDIS_PORT", "6379").strip() or "6379"),
+        redis_password=os.getenv("REDIS_PASSWORD", "").strip(),
+        redis_db=int(os.getenv("REDIS_DB", "0").strip() or "0"),
         sentry_dsn=os.getenv("SENTRY_DSN", "").strip(),
         sentry_environment=os.getenv("SENTRY_ENVIRONMENT", "development").strip(),
         sentry_release=os.getenv("SENTRY_RELEASE", "").strip(),

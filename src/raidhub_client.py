@@ -57,7 +57,12 @@ class RaidHubClient:
         }
         return jwt.encode(payload, self._jwt_secret, algorithm="HS256")
 
-    def _headers(self, discord_context: dict[str, Any] | None = None) -> dict[str, str]:
+    def _headers(
+        self,
+        discord_context: dict[str, Any] | None = None,
+        *,
+        user_bearer: str | None = None,
+    ) -> dict[str, str]:
         headers: dict[str, str] = {}
         if self._api_key:
             headers["x-api-key"] = self._api_key
@@ -65,6 +70,8 @@ class RaidHubClient:
             headers["authorization"] = (
                 f"{DISCORD_AUTH_SCHEME} {self._sign_discord_jwt(discord_context)}"
             )
+        if user_bearer:
+            headers["x-raidhub-user-authorization"] = f"Bearer {user_bearer}"
         return headers
 
     async def request(
@@ -74,8 +81,9 @@ class RaidHubClient:
         *,
         params: dict[str, Any] | None = None,
         discord_context: dict[str, Any] | None = None,
+        user_bearer: str | None = None,
     ) -> dict[str, Any]:
-        headers = self._headers(discord_context)
+        headers = self._headers(discord_context, user_bearer=user_bearer)
         async with httpx.AsyncClient(base_url=self._base_url, timeout=15) as client:
             response = await client.request(method, path, params=params, headers=headers)
             response.raise_for_status()
@@ -89,9 +97,10 @@ class RaidHubClient:
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | list[Any] | None = None,
         discord_context: dict[str, Any] | None = None,
+        user_bearer: str | None = None,
     ) -> dict[str, Any]:
         """Normalize RaidHub JSON envelopes and HTTP status without raising on transport/HTTP errors."""
-        headers = self._headers(discord_context)
+        headers = self._headers(discord_context, user_bearer=user_bearer)
         try:
             async with httpx.AsyncClient(base_url=self._base_url, timeout=30) as client:
                 response = await client.request(

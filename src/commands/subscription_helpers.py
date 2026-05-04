@@ -6,7 +6,7 @@ from typing import Any
 
 from ..raidhub_client import RaidHubClient, discord_invocation_context
 from .subscribe_resolution import format_player_display_name
-from .subscription_routes import SUB_ROUTE_STATUS
+from .subscription_routes import SUB_ROUTE_STATUS, SUBSCRIPTION_WEBHOOKS_PATH
 from .shared import (
     base_embed,
     discord_message_for_failed_envelope,
@@ -217,7 +217,7 @@ async def fetch_subscription_status_envelope(
     ctx = discord_invocation_context(interaction, route_id=SUB_ROUTE_STATUS)
     return await raidhub.request_envelope(
         "GET",
-        "/subscriptions/discord/webhooks",
+        SUBSCRIPTION_WEBHOOKS_PATH,
         discord_context=ctx,
     )
 
